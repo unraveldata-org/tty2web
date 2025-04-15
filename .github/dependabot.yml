@@ -9,4 +9,3 @@ updates:
     directory: "/go.mod" # Location of package manifests
     schedule:
       interval: "weekly"
-    versioning-strategy: "increase"
