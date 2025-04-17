@@ -29,6 +29,12 @@ func SetOTPSecret(secret string, debug bool) {
 	}
 }
 
+func SetOTPInterval(interval int) {
+	if interval >= 30 {
+		otpInterval = interval
+	}
+}
+
 func VerifyOTP(token string) bool {
 	if otpSecret == "" {
 		return false

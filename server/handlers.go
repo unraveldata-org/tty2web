@@ -16,7 +16,6 @@ import (
 	"sync/atomic"
 
 	"github.com/gorilla/websocket"
-	"github.com/kost/tty2web/utils"
 	"github.com/pkg/errors"
 
 	"github.com/kost/tty2web/webtty"
@@ -165,7 +164,6 @@ func (server *Server) processWSConn(ctx context.Context, conn *websocket.Conn) e
 	}
 	if server.options.OTP != "" {
 		opts = append(opts, webtty.WithOTP())
-		utils.SetOTPSecret(server.options.OTP, server.options.Verbose)
 	}
 	server.options.Preferences.EnableWebGL = server.options.EnableWebGL
 	opts = append(opts, webtty.WithMasterPreferences(server.options.Preferences))
