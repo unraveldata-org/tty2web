@@ -123,6 +123,7 @@ Point your web browser to <http://127.0.0.1:8000>
    --close-signal value          Signal sent to the command process when tty2webclose it (default: SIGHUP) (default: 1) [$TTY2WEB_CLOSE_SIGNAL]
    --close-timeout value         Time in seconds to force kill process after client is disconnected (default: -1) (default: -1) [$TTY2WEB_CLOSE_TIMEOUT]
    --config value                Config file path (default: "~/.tty2web") [$TTY2WEB_CONFIG]
+   --otp                         One time password secret for terminal (default: "")
    --help                        Displays help (default: false)
    --version, -v                 print the version
 ```
