@@ -15,6 +15,7 @@ require (
 	github.com/kost/regeorgo v0.0.0-20211119151427-d6c70e76b00e
 	github.com/pkg/errors v0.9.1
 	github.com/urfave/cli/v2 v2.25.7
+	github.com/xlzd/gotp v0.1.0
 	github.com/yudai/hcl v0.0.0-20151013225006-5fa2393b3552
 )
 

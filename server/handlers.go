@@ -5,17 +5,18 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"log"
-	"os"
 	"io"
+	"log"
 	"net/http"
 	"net/url"
-	"sync/atomic"
+	"os"
 	"path"
-	"strings"
 	"path/filepath"
+	"strings"
+	"sync/atomic"
 
 	"github.com/gorilla/websocket"
+	"github.com/kost/tty2web/utils"
 	"github.com/pkg/errors"
 
 	"github.com/kost/tty2web/webtty"
@@ -162,6 +163,10 @@ func (server *Server) processWSConn(ctx context.Context, conn *websocket.Conn) e
 	if server.options.Preferences == nil {
 		server.options.Preferences = &HtermPrefernces{}
 	}
+	if server.options.OTP != "" {
+		opts = append(opts, webtty.WithOTP())
+		utils.SetOTPSecret(server.options.OTP, server.options.Verbose)
+	}
 	server.options.Preferences.EnableWebGL = server.options.EnableWebGL
 	opts = append(opts, webtty.WithMasterPreferences(server.options.Preferences))
 
@@ -221,7 +226,7 @@ func (server *Server) handleUpload(w http.ResponseWriter, r *http.Request) {
 		var destfile string
 		file, header, erru := r.FormFile("f")
 		if erru != nil {
-			tmpstr:=fmt.Sprintf("Upload error: %v", erru)
+			tmpstr := fmt.Sprintf("Upload error: %v", erru)
 			w.Write([]byte(tmpstr))
 			w.Write([]byte("</body></html>"))
 			return
@@ -230,22 +235,22 @@ func (server *Server) handleUpload(w http.ResponseWriter, r *http.Request) {
 
 		destdir := r.FormValue("d")
 		if destdir == "" {
-			destfile=path.Join(server.options.FileUpload,filepath.Base(header.Filename))
+			destfile = path.Join(server.options.FileUpload, filepath.Base(header.Filename))
 		} else {
 			ndestdir := filepath.Clean(destdir)
 			destfile = path.Join(server.options.FileUpload, ndestdir, filepath.Base(header.Filename))
 			abs, errabs := filepath.Abs(destfile)
 			if errabs != nil || !strings.HasPrefix(abs, server.options.FileUpload) {
 				log.Printf("Request file manipulation detected %s (abs: %s) for %s", destfile, abs, r.RemoteAddr)
-				destfile=path.Join(server.options.FileUpload,filepath.Base(header.Filename))
+				destfile = path.Join(server.options.FileUpload, filepath.Base(header.Filename))
 			}
 		}
-		deststr:=fmt.Sprintf("Uploading %s", destfile)
+		deststr := fmt.Sprintf("Uploading %s", destfile)
 		w.Write([]byte(deststr))
 
 		f, errf := os.OpenFile(destfile, os.O_WRONLY|os.O_CREATE, 0666)
 		if errf != nil {
-			tmpstr:=fmt.Sprintf("Error creating file %s: %v", destfile, errf)
+			tmpstr := fmt.Sprintf("Error creating file %s: %v", destfile, errf)
 			w.Write([]byte(tmpstr))
 			w.Write([]byte("</body></html>"))
 			return
@@ -278,9 +283,9 @@ func (server *Server) handleConfig(w http.ResponseWriter, r *http.Request) {
 	if server.options.Scexec {
 		w.Write([]byte("document.getElementById(\"scexec\").style.display = \"block\";"))
 	}
-	jsurl:="./js"
+	jsurl := "./js"
 	if server.options.JSURL != "" {
-		jsurl=server.options.JSURL
+		jsurl = server.options.JSURL
 	}
 	w.Write([]byte("var jsb = document.createElement(\"script\"); jsb.src = \"" + jsurl + "/tty2web-bundle.js\";"))
 	w.Write([]byte("jsb.onerror = e => console.log(\"error loading tty2web-bundle.js\"); document.head.appendChild(jsb);"))

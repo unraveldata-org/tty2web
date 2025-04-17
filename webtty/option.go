@@ -60,3 +60,11 @@ func WithMasterPreferences(preferences interface{}) Option {
 		return nil
 	}
 }
+
+// WithOTP sets an OTP secret for the session.
+func WithOTP() Option {
+	return func(wt *WebTTY) error {
+		wt.shouldVerifyOTP = true
+		return nil
+	}
+}

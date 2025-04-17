@@ -4,8 +4,12 @@ import (
 	"context"
 	"encoding/base64"
 	"encoding/json"
+	"log"
+	"strconv"
 	"sync"
+	"time"
 
+	"github.com/kost/tty2web/utils"
 	"github.com/pkg/errors"
 )
 
@@ -24,6 +28,9 @@ type WebTTY struct {
 	rows        int
 	reconnect   int // in seconds
 	masterPrefs []byte
+
+	// OTP
+	shouldVerifyOTP bool
 
 	bufferSize int
 	writeMutex sync.Mutex
@@ -70,6 +77,12 @@ func (wt *WebTTY) Run(ctx context.Context) error {
 		errs <- func() error {
 			buffer := make([]byte, wt.bufferSize)
 			for {
+				// if OTP enabled and not verified - wait for OTP
+				if wt.shouldVerifyOTP {
+					time.Sleep(1 * time.Second)
+					continue
+				}
+
 				n, err := wt.slave.Read(buffer)
 				if err != nil {
 					return ErrSlaveClosed
@@ -130,6 +143,14 @@ func (wt *WebTTY) sendInitializeMessage() error {
 		}
 	}
 
+	// if OTP enabled send OTP prompt
+	if wt.shouldVerifyOTP {
+		err := wt.sentOTPMessage("please enter the OTP code:")
+		if err != nil {
+			return errors.Wrapf(err, "failed to send OTP message")
+		}
+	}
+
 	return nil
 }
 
@@ -170,6 +191,11 @@ func (wt *WebTTY) handleMasterReadEvent(data []byte) error {
 			return nil
 		}
 
+		// if OTP enabled and not verified - wait for OTP
+		if wt.shouldVerifyOTP {
+			return nil
+		}
+
 		_, err := wt.slave.Write(data[1:])
 		if err != nil {
 			return errors.Wrapf(err, "failed to write received data to slave")
@@ -206,10 +232,42 @@ func (wt *WebTTY) handleMasterReadEvent(data []byte) error {
 		}
 
 		wt.slave.ResizeTerminal(columns, rows)
+	case OTPInput:
+		if len(data) <= 1 {
+			return errors.New("received malformed remote command for OTP input: empty payload")
+		}
+		otp := data[1:]
+		// Verify OTP
+		log.Println("OTP code received:", string(otp))
+		if utils.VerifyOTP(string(otp)) {
+			wt.shouldVerifyOTP = false
+			err := wt.sentOTPMessage("\n\rcode correct\n\r")
+			if err != nil {
+				return errors.Wrapf(err, "failed to send OTP message")
+			}
+		} else {
+			err := wt.sentOTPMessage("\n\rcode incorrect\n\rPlease enter the OTP code:")
+			if err != nil {
+				return errors.Wrapf(err, "failed to send OTP message")
+			}
+		}
 	default:
 		return errors.Errorf("unknown message type `%c`", data[0])
 	}
 
+	return nil
+}
+
+func (wt *WebTTY) sentOTPMessage(message string) error {
+	msg := map[string]string{
+		"message":      message,
+		"shouldVerify": strconv.FormatBool(wt.shouldVerifyOTP),
+	}
+	msgBytes, _ := json.Marshal(msg)
+	err := wt.masterWrite(append([]byte{OTPRequest}, []byte(base64.StdEncoding.EncodeToString(msgBytes))...))
+	if err != nil {
+		return errors.Wrapf(err, "failed to send message to master")
+	}
 	return nil
 }
 
