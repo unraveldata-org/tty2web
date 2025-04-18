@@ -75,6 +75,7 @@ func main() {
 		if appOptions.OTP != "" {
 			utils.SetOTPSecret(appOptions.OTP, appOptions.Verbose)
 			utils.SetOTPInterval(appOptions.OTPInterval)
+			utils.SetOTPDigit(appOptions.OTPDigit)
 		}
 
 		err = appOptions.Validate()

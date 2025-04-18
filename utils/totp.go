@@ -36,6 +36,14 @@ func SetOTPInterval(interval int) {
 	}
 }
 
+func SetOTPDigit(digit int) {
+	if digit >= 6 {
+		otpDigit = digit
+	} else {
+		log.Println("OTP digit is out of range must be greater than or equal 6")
+	}
+}
+
 func VerifyOTP(token string) bool {
 	if otpSecret == "" {
 		return false

@@ -55,8 +55,8 @@ type Options struct {
 	Term                string           `hcl:"term" flagName:"term" flagDescribe:"Terminal name to use on the browser, one of xterm or hterm." default:"xterm"`
 	OTP                 string           `hcl:"otp" flagName:"otp" flagDescribe:"One time password secret for terminal" default:""`
 	OTPInterval         int              `hcl:"otp_interval" flagName:"otp-interval" flagDescribe:"One time password interval in seconds" default:"3600"`
-
-	TitleVariables map[string]interface{}
+	OTPDigit            int              `hcl:"otp_digit" flagName:"otp-digit" flagDescribe:"One time password digit length" default:"8"`
+	TitleVariables      map[string]interface{}
 }
 
 func (options *Options) Validate() error {
