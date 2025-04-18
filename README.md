@@ -124,7 +124,8 @@ Point your web browser to <http://127.0.0.1:8000>
    --close-timeout value         Time in seconds to force kill process after client is disconnected (default: -1) (default: -1) [$TTY2WEB_CLOSE_TIMEOUT]
    --config value                Config file path (default: "~/.tty2web") [$TTY2WEB_CONFIG]
    --otp                         One time password secret for terminal (default: "")
-   --otp-interval                Interval for one time password (default: 3600)
+   --otp-interval                Interval for one time password (default: 180)
+   --otp-digits                  Digits for one time password (default: 8)
    --help                        Displays help (default: false)
    --version, -v                 print the version
 ```
