@@ -73,9 +73,9 @@ func main() {
 		appOptions.EnableBasicAuth = c.IsSet("credential")
 		appOptions.EnableTLSClientAuth = c.IsSet("tls-ca-crt")
 		if appOptions.OTP != "" {
-			utils.SetOTPSecret(appOptions.OTP, appOptions.Verbose)
 			utils.SetOTPInterval(appOptions.OTPInterval)
 			utils.SetOTPDigit(appOptions.OTPDigit)
+			utils.SetOTPSecret(appOptions.OTP, appOptions.Verbose)
 		}
 
 		err = appOptions.Validate()
