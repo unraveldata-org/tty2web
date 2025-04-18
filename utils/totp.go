@@ -9,7 +9,8 @@ import (
 
 var (
 	otpSecret   = ""
-	otpInterval = 3600 // 1 hour
+	otpInterval = 3600
+	otpDigit    = 8 // 1 hour
 )
 
 // SetOTPSecret sets the OTP secret for the application.
@@ -18,7 +19,7 @@ func SetOTPSecret(secret string, debug bool) {
 	if debug {
 		totp := gotp.NewTOTP(
 			otpSecret,
-			6,
+			otpDigit,
 			otpInterval,
 			nil,
 		)
@@ -43,7 +44,7 @@ func VerifyOTP(token string) bool {
 	// Implement the OTP verification logic here.
 	totp := gotp.NewTOTP(
 		otpSecret,
-		6,
+		otpDigit,
 		otpInterval,
 		nil,
 	)
