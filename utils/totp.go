@@ -9,8 +9,8 @@ import (
 
 var (
 	otpSecret   = ""
-	otpInterval = 3600
-	otpDigit    = 8 // 1 hour
+	otpInterval = 180 // 3 minutes
+	otpDigit    = 8   // 1 hour
 )
 
 // SetOTPSecret sets the OTP secret for the application.
