@@ -87,9 +87,6 @@ func (wt *WebTTY) Run(ctx context.Context) error {
 				// if OTP enabled and not verified - wait for OTP
 				for wt.shouldVerifyOTP {
 					time.Sleep(1 * time.Second)
-					if !wt.shouldVerifyOTP {
-						break
-					}
 				}
 
 				err = wt.handleSlaveReadEvent(buffer[:n])
