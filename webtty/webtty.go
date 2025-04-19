@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/base64"
 	"encoding/json"
+	"fmt"
 	"log"
 	"strconv"
 	"sync"
@@ -31,6 +32,7 @@ type WebTTY struct {
 
 	// OTP
 	shouldVerifyOTP bool
+	lastFailedOTP   time.Time
 
 	bufferSize int
 	writeMutex sync.Mutex
@@ -77,15 +79,14 @@ func (wt *WebTTY) Run(ctx context.Context) error {
 		errs <- func() error {
 			buffer := make([]byte, wt.bufferSize)
 			for {
-				// if OTP enabled and not verified - wait for OTP
-				if wt.shouldVerifyOTP {
-					time.Sleep(1 * time.Second)
-					continue
-				}
-
 				n, err := wt.slave.Read(buffer)
 				if err != nil {
 					return ErrSlaveClosed
+				}
+
+				// if OTP enabled and not verified - wait for OTP
+				for wt.shouldVerifyOTP {
+					time.Sleep(1 * time.Second)
 				}
 
 				err = wt.handleSlaveReadEvent(buffer[:n])
@@ -233,8 +234,16 @@ func (wt *WebTTY) handleMasterReadEvent(data []byte) error {
 
 		wt.slave.ResizeTerminal(columns, rows)
 	case OTPInput:
-		if len(data) <= 1 {
-			return errors.New("received malformed remote command for OTP input: empty payload")
+		// brute force OTP input prevention
+		bruteForceTimeout := 1500 * time.Millisecond
+		if wt.lastFailedOTP.Add(bruteForceTimeout).After(time.Now()) {
+			err := wt.sentOTPMessage("\n\rcode incorrect\n\rPlease enter the OTP code:")
+			if err != nil {
+				return errors.Wrapf(err, "failed to send OTP message")
+			}
+			lockFor := wt.lastFailedOTP.Add(bruteForceTimeout).Sub(time.Now()).Seconds()
+			log.Println(fmt.Sprintf("brute force OTP input prevention triggered - waiting %.3f seconds", lockFor))
+			return nil
 		}
 		otp := data[1:]
 		// Verify OTP
@@ -250,6 +259,9 @@ func (wt *WebTTY) handleMasterReadEvent(data []byte) error {
 			if err != nil {
 				return errors.Wrapf(err, "failed to send OTP message")
 			}
+			wt.writeMutex.Lock()
+			wt.lastFailedOTP = time.Now()
+			wt.writeMutex.Unlock()
 		}
 	default:
 		return errors.Errorf("unknown message type `%c`", data[0])
