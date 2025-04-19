@@ -114,7 +114,7 @@ Point your web browser to <http://127.0.0.1:8000>
    --reconnect-time value        Time to reconnect (default: 10) [$TTY2WEB_RECONNECT_TIME]
    --max-connection value        Maximum connection to tty2web (default: 10) [$TTY2WEB_MAX_CONNECTION]
    --once                        Accept only one client and exit on disconnection (default: false) [$TTY2WEB_ONCE]
-   --timeout value               Timeout seconds for waiting a client(0 to disable) (default: 60) [$TTY2WEB_TIMEOUT]
+   --timeout value               Timeout seconds for waiting a client(0 to disable) (default: 0) [$TTY2WEB_TIMEOUT]
    --permit-arguments            Permit clients to send command line arguments in URL (e.g. http://example.com:8080/?arg=AAA&arg=BBB) (default: false) [$TTY2WEB_PERMIT_ARGUMENTS]
    --width value                 Static width of the screen, 0(default) means dynamically resize (default: 0) [$TTY2WEB_WIDTH]
    --height value                Static height of the screen, 0(default) means dynamically resize (default: 0) [$TTY2WEB_HEIGHT]
