@@ -16,6 +16,7 @@ import (
 	"sync/atomic"
 
 	"github.com/gorilla/websocket"
+	"github.com/kost/tty2web/utils"
 	"github.com/pkg/errors"
 
 	"github.com/kost/tty2web/webtty"
@@ -312,4 +313,64 @@ func (server *Server) titleVariables(order []string, varUnits map[string]map[str
 	}
 
 	return titleVars
+}
+
+func (server *Server) handleOauthCallBack(w http.ResponseWriter, r *http.Request) {
+	code := r.URL.Query().Get("code")
+	if code == "" {
+		http.Error(w, "Missing code parameter", http.StatusBadRequest)
+		return
+	}
+	tok := OauthConf.Exchange(code)
+	if tok == nil {
+		http.Error(w, "Failed to exchange code for token", http.StatusInternalServerError)
+		return
+	}
+	w.Header().Set("Content-Type", "text/html")
+	body := fmt.Sprintf(`
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<title>Authorization Successful</title>
+</head>
+<body>
+<h1>Authorization successful</h1>
+<p>Redirect to home page in 5 seconds</p>
+<script>
+setTimeout(function() {
+	 window.location.href = "%s";
+}, 5000);
+</script>
+</body>
+</html>
+`, "/")
+
+	claims, err := utils.DecodeOauthTokenUnsafe(tok.AccessToken)
+	if err != nil {
+		log.Printf("Error decoding OAuth2 token: %v", err)
+		http.Error(w, "Invalid access token", http.StatusInternalServerError)
+		return
+	}
+	if claims == nil {
+		log.Printf("Warning: OAuth2 token claims are empty for %s", r.RemoteAddr)
+		http.Error(w, "Invalid access token", http.StatusInternalServerError)
+		return
+	}
+	log.Printf("OAuth2 authorization successful for %s and user %s", r.RemoteAddr, claims["unique_name"])
+	localToken := OauthConf.GenerateLocalToken(map[string]interface{}{"username": claims["unique_name"]})
+	http.SetCookie(w, &http.Cookie{
+		Name:     oauthCookieName,
+		Value:    localToken,
+		Path:     "/",
+		Expires:  tok.Expiry,
+		HttpOnly: true,
+		SameSite: http.SameSiteLaxMode,
+	})
+	sizeOfCookie := len(oauthCookieName) + len(localToken) + 20 // 20 for other cookie attributes
+	if sizeOfCookie > 4096 {
+		log.Printf("Warning: OAuth2 cookie size (%d bytes) exceeds the limit of 4096 bytes. Consider using a shorter token or reducing cookie attributes.", sizeOfCookie)
+	}
+	w.Write([]byte(body))
+	w.WriteHeader(http.StatusOK)
 }

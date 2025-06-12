@@ -10,22 +10,29 @@ import (
 	"log"
 	"net"
 	"net/http"
+	"os"
 	"regexp"
 	noesctmpl "text/template"
 	"time"
-	"os"
 
 	"github.com/NYTimes/gziphandler"
 	"github.com/gorilla/websocket"
+	"github.com/kost/tty2web/utils"
 	"github.com/pkg/errors"
+	"golang.org/x/oauth2"
 
+	"github.com/kost/httpexecute"
+	"github.com/kost/regeorgo"
 	"github.com/kost/tty2web/bindata"
 	"github.com/kost/tty2web/pkg/homedir"
 	"github.com/kost/tty2web/pkg/randomstring"
-	"github.com/kost/tty2web/webtty"
 	"github.com/kost/tty2web/tlshelp"
-	"github.com/kost/httpexecute"
-	"github.com/kost/regeorgo"
+	"github.com/kost/tty2web/webtty"
+)
+
+var (
+	OauthConf       = &utils.OAuth2Config{}
+	oauthCookieName = "tty2web.oauth.token"
 )
 
 // Server provides a webtty HTTP endpoint.
@@ -101,7 +108,7 @@ func (server *Server) Run(ctx context.Context, options ...RunOption) error {
 	counter := newCounter(time.Duration(server.options.Timeout) * time.Second)
 
 	path := "/"
-	if server.options.Url!="" {
+	if server.options.Url != "" {
 		path = "/" + server.options.Url + "/"
 	}
 	if server.options.EnableRandomUrl {
@@ -132,7 +139,7 @@ func (server *Server) Run(ctx context.Context, options ...RunOption) error {
 		keyFile := homedir.Expand(server.options.TLSKeyFile)
 		log.Printf("TLS crt file: " + crtFile)
 		log.Printf("TLS key file: " + keyFile)
-		cer, err := tls.LoadX509KeyPair(crtFile,keyFile)
+		cer, err := tls.LoadX509KeyPair(crtFile, keyFile)
 		if err != nil {
 			log.Printf("Error loading TLS key and crt file %s and %s: %v. Generating random one!", crtFile, keyFile, err)
 
@@ -142,7 +149,7 @@ func (server *Server) Run(ctx context.Context, options ...RunOption) error {
 			}
 		}
 		config := &tls.Config{Certificates: []tls.Certificate{cer}}
-		srv.TLSConfig=config
+		srv.TLSConfig = config
 	}
 	if server.options.Dns != "" {
 		go func() {
@@ -192,7 +199,7 @@ func (server *Server) Run(ctx context.Context, options ...RunOption) error {
 			}()
 		} else {
 			go func() {
-				session, err = connectForSocks(server.options.Connect,server.options.Proxy, server.options.ProxyAuth, server.options.Password, server.options.AgentTLS)
+				session, err = connectForSocks(server.options.Connect, server.options.Proxy, server.options.ProxyAuth, server.options.Password, server.options.AgentTLS)
 				if err != nil {
 					log.Printf("Error creating sessions %s", err)
 					srvErr <- err
@@ -250,14 +257,14 @@ func (server *Server) setupHandlers(ctx context.Context, cancel context.CancelFu
 
 	if server.options.All {
 		if server.options.FileDownload == "" {
-			server.options.FileDownload="/"
+			server.options.FileDownload = "/"
 		}
 		if server.options.FileUpload == "" {
 			server.options.FileUpload = "/"
 		}
-		server.options.API=true
-		server.options.Regeorg=true
-		server.options.Scexec=true
+		server.options.API = true
+		server.options.Regeorg = true
+		server.options.Scexec = true
 	}
 
 	siteMux.HandleFunc(pathPrefix, server.handleIndex)
@@ -295,11 +302,42 @@ func (server *Server) setupHandlers(ctx context.Context, cancel context.CancelFu
 		siteMux.HandleFunc(pathPrefix+"sc/", sc.SCHandler)
 	}
 
+	// OAuth2 configuration
+	if server.options.EnableOauth {
+		log.Printf("OAuth2 authentication enabled")
+		// process OauthClientID and OauthClientSecret loading from config file mu
+		if server.options.OauthClientID == "" || server.options.OauthClientSecret == "" {
+			log.Fatalf("oauth2 is enabled, but no client ID or secret provided")
+		}
+		if server.options.OauthRedirectURL == "" {
+			log.Fatalf("oauth2 is enabled, but no redirect URL provided")
+		}
+		if server.options.OauthAuthUrl == "" || server.options.OauthTokenUrl == "" {
+			log.Fatalf("oauth2 is enabled, but no auth or token URL provided")
+		}
+		OauthConf = utils.NewOAuth2Config(
+			server.options.OauthClientID,
+			server.options.OauthClientSecret,
+			server.options.OauthRedirectURL,
+			server.options.JWTSecret,
+			server.options.OauthScopes,
+			oauth2.Endpoint{
+				AuthURL:       server.options.OauthAuthUrl,
+				TokenURL:      server.options.OauthTokenUrl,
+				DeviceAuthURL: server.options.OauthDeviceAuthUrl,
+			},
+		)
+		siteMux.HandleFunc(pathPrefix+"oauth/callback", server.handleOauthCallBack)
+	}
+
 	siteHandler := http.Handler(siteMux)
 
 	if server.options.EnableBasicAuth {
 		log.Printf("Using Basic Authentication")
 		siteHandler = server.wrapBasicAuth(siteHandler, server.options.Credential)
+	} else if server.options.EnableOauth {
+		log.Printf("Using OAuth Authentication")
+		siteHandler = server.wrapOauth2(siteHandler)
 	}
 
 	withGz := gziphandler.GzipHandler(server.wrapHeaders(siteHandler))

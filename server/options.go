@@ -10,6 +10,8 @@ type Options struct {
 	PermitWrite         bool             `hcl:"permit_write" flagName:"permit-write" flagSName:"w" flagDescribe:"Permit clients to write to the TTY (BE CAREFUL)" default:"false"`
 	EnableBasicAuth     bool             `hcl:"enable_basic_auth" default:"false"`
 	Credential          string           `hcl:"credential" flagName:"credential" flagSName:"c" flagDescribe:"Credential for Basic Authentication (ex: user:pass, default disabled)" default:""`
+	EnableOauth         bool             `hcl:"enable_oauth" flagName:"oauth" flagDescribe:"Enable OAuth authentication (default disabled)" default:"false"`
+	OauthConfig         string           `hcl:"oauth_config" flagName:"oauth-config" flagDescribe:"Path to OAuth configuration file (default: ~/.tty2web_oauth.json)" default:"~/.tty2web_oauth.json"`
 	EnableRandomUrl     bool             `hcl:"enable_random_url" flagName:"random-url" flagSName:"r" flagDescribe:"Add a random string to the URL" default:"false"`
 	EnableWebGL         bool             `hcl:"enable_webgl" flagName:"enable-webgl" flagDescribe:"Enable WebGL renderer" default:"true"`
 	All                 bool             `hcl:"all" flagName:"all" flagDescribe:"Turn on all features: download /, upload /, api, regeorg, ..." default:"false"`
@@ -57,6 +59,14 @@ type Options struct {
 	OTPInterval         int              `hcl:"otp_interval" flagName:"otp-interval" flagDescribe:"One time password interval in seconds" default:"180"`
 	OTPDigit            int              `hcl:"otp_digit" flagName:"otp-digit" flagDescribe:"One time password digit length" default:"8"`
 	TitleVariables      map[string]interface{}
+	OauthClientID       string   `hcl:"oauth_client_id" flagName:"oauth-client-id" flagDescribe:"OAuth client ID for OAuth authentication" default:""`
+	OauthClientSecret   string   `hcl:"oauth_client_secret" flagName:"oauth-client-secret" flagDescribe:"OAuth client secret for OAuth authentication" default:""`
+	OauthRedirectURL    string   `hcl:"oauth_redirect_url" flagName:"oauth-redirect-url" flagDescribe:"OAuth redirect URL for OAuth authentication" default:""`
+	OauthScopes         []string `hcl:"oauth_scopes" flagName:"oauth-scopes" flagDescribe:"OAuth scopes for OAuth authentication" default:"read"`
+	OauthAuthUrl        string   `hcl:"oauth_auth_url" flagName:"oauth-auth-url" flagDescribe:"OAuth authorization URL for OAuth authentication" default:""`
+	OauthTokenUrl       string   `hcl:"oauth_token_url" flagName:"oauth-token-url" flagDescribe:"OAuth token URL for OAuth authentication" default:""`
+	OauthDeviceAuthUrl  string   `hcl:"oauth_device_auth_url" flagName:"oauth-device-auth-url" flagDescribe:"OAuth device authorization URL for OAuth authentication" default:""`
+	JWTSecret           string   `hcl:"jwt_secret" flagName:"jwt-secret" flagDescribe:"JWT secret for JWT authentication if empty will generate on the fly" default:""`
 }
 
 func (options *Options) Validate() error {

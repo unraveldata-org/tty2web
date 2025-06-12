@@ -5,6 +5,9 @@ import (
 	"log"
 	"net/http"
 	"strings"
+
+	"github.com/kost/tty2web/utils"
+	"github.com/pkg/errors"
 )
 
 func (server *Server) wrapLogger(handler http.Handler) http.Handler {
@@ -47,5 +50,56 @@ func (server *Server) wrapBasicAuth(handler http.Handler, credential string) htt
 
 		log.Printf("Basic Authentication Succeeded: %s", r.RemoteAddr)
 		handler.ServeHTTP(w, r)
+	})
+}
+
+// OAuth2 middleware
+func (server *Server) wrapOauth2(handler http.Handler) http.Handler {
+	noneAuthPaths := []string{
+		"/oauth/callback",
+		"/oauth/login",
+		"/oauth/logout",
+		"/static/",
+		"/favicon.ico",
+		"/js/",
+		"/css/",
+	}
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// Check if the request path is in the list of paths that do not require authentication
+		for _, path := range noneAuthPaths {
+			if strings.HasPrefix(r.URL.Path, path) {
+				// If the path is in the list, skip authentication
+				handler.ServeHTTP(w, r)
+				return
+			}
+		}
+		// check for Authorization header
+		token := strings.SplitN(r.Header.Get("Authorization"), " ", 2)
+		if len(token) == 2 && strings.ToLower(token[0]) == "JWT" {
+			// validate JWT token
+			if _, err := OauthConf.ValidateLocalToken(token[1]); err == nil {
+				handler.ServeHTTP(w, r)
+				return
+			}
+		}
+
+		// check for authentication in cookie
+		cookie, err := r.Cookie(oauthCookieName)
+		if err != nil && !errors.Is(err, http.ErrNoCookie) {
+			log.Println("Error getting cookies:", err)
+			http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+			return
+		} else if cookie != nil {
+			_, err = OauthConf.ValidateLocalToken(cookie.Value)
+			if err == nil {
+				log.Printf("auth cookie value: %s", cookie.Value)
+				handler.ServeHTTP(w, r)
+				return
+			}
+		}
+
+		utils.OauthMissingResponse(w, r, OauthConf)
+		log.Printf("OAuth2 Authentication Failed: %s", r.RemoteAddr)
+		return
 	})
 }
