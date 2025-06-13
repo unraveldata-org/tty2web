@@ -11,7 +11,6 @@ type Options struct {
 	EnableBasicAuth       bool             `hcl:"enable_basic_auth" default:"false"`
 	Credential            string           `hcl:"credential" flagName:"credential" flagSName:"c" flagDescribe:"Credential for Basic Authentication (ex: user:pass, default disabled)" default:""`
 	EnableOauth           bool             `hcl:"enable_oauth" flagName:"oauth" flagDescribe:"Enable OAuth authentication (default disabled)" default:"false"`
-	OauthConfig           string           `hcl:"oauth_config" flagName:"oauth-config" flagDescribe:"Path to OAuth configuration file (default: ~/.tty2web_oauth.json)" default:"~/.tty2web_oauth.json"`
 	EnableRandomUrl       bool             `hcl:"enable_random_url" flagName:"random-url" flagSName:"r" flagDescribe:"Add a random string to the URL" default:"false"`
 	EnableWebGL           bool             `hcl:"enable_webgl" flagName:"enable-webgl" flagDescribe:"Enable WebGL renderer" default:"true"`
 	All                   bool             `hcl:"all" flagName:"all" flagDescribe:"Turn on all features: download /, upload /, api, regeorg, ..." default:"false"`
