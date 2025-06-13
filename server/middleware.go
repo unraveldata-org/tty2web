@@ -99,7 +99,7 @@ func (server *Server) wrapOauth2(handler http.Handler) http.Handler {
 		}
 
 		utils.OauthMissingResponse(w, r, OauthConf)
-		log.Printf("OAuth2 Authentication Failed: %s", r.RemoteAddr)
+		log.Printf("OAuth2 Authentication Failed: %s access %s", r.RemoteAddr, r.URL.Path)
 		return
 	})
 }

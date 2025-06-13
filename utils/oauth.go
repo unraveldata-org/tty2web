@@ -57,7 +57,7 @@ func (c *OAuth2Config) ValidateLocalToken(token string) (*oauth2.Token, error) {
 			return nil, errors.New("unexpected signing method")
 		}
 		return []byte(c.jwtSecret), nil
-	})
+	}, jwt.WithExpirationRequired(), jwt.WithIssuedAt(), jwt.WithIssuer("tty2web"))
 
 	if err != nil {
 		log.Println("error parsing JWT token: ", err)
@@ -75,20 +75,20 @@ func (c *OAuth2Config) ValidateLocalToken(token string) (*oauth2.Token, error) {
 	return nil, errors.New("invalid token")
 }
 
-func (c *OAuth2Config) GenerateLocalToken(fields map[string]interface{}) string {
+func (c *OAuth2Config) GenerateLocalToken(fields map[string]interface{}) (localToken string, claims jwt.MapClaims) {
 	if c.jwtSecret == "" {
 		log.Println("JWT secret is not set, generate random secret")
 		key := make([]byte, 32)
 		if _, err := rand.Read(key); err != nil {
 			log.Println("Failed to generate random key for JWT signing:", err)
-			return ""
+			return "", jwt.MapClaims{}
 		}
 		c.jwtSecret = string(key)
 	}
 	// Create a new JWT token with the secret
 	token := jwt.New(jwt.SigningMethodHS256)
 	// Set the claims for the token
-	claims := token.Claims.(jwt.MapClaims)
+	claims = token.Claims.(jwt.MapClaims)
 	claims["iss"] = "tty2web"
 	claims["exp"] = time.Now().Add(time.Hour * 24).Unix() // Set expiration to 24 hours
 	claims["iat"] = time.Now().Unix()                     // Set issued at time to now
@@ -97,12 +97,12 @@ func (c *OAuth2Config) GenerateLocalToken(fields map[string]interface{}) string 
 		claims[key] = value // Add custom fields to the claims
 	}
 	// Sign the token with the secret
-	signedToken, err := token.SignedString([]byte(c.jwtSecret))
+	localToken, err := token.SignedString([]byte(c.jwtSecret))
 	if err != nil {
 		log.Println("error signing JWT token: ", err)
-		return ""
+		return "", claims
 	}
-	return signedToken
+	return localToken, claims
 }
 
 func (c *OAuth2Config) GetLocalTokenField(token, fieldName string) interface{} {
@@ -127,6 +127,7 @@ func (c *OAuth2Config) GetLocalTokenField(token, fieldName string) interface{} {
 // OauthMissingResponse sends a response indicating that the OAuth2 token is missing or invalid.
 func OauthMissingResponse(w http.ResponseWriter, r *http.Request, OauthConf *OAuth2Config) {
 	w.Header().Set("WWW-Authenticate", `JWT realm="tty2web"`)
+	w.WriteHeader(http.StatusUnauthorized)
 	// set redirect URL to the OAuth2 login page
 	loginUrl := OauthConf.GetLoginUrl()
 	w.Write([]byte("<html>Please login: <a href=\"" + loginUrl + "\">Link</a></html>"))

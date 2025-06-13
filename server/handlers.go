@@ -315,6 +315,7 @@ func (server *Server) titleVariables(order []string, varUnits map[string]map[str
 	return titleVars
 }
 
+// handleOauthCallBack processes the OAuth2 callback and sets the local token in a cookie.
 func (server *Server) handleOauthCallBack(w http.ResponseWriter, r *http.Request) {
 	code := r.URL.Query().Get("code")
 	if code == "" {
@@ -357,13 +358,14 @@ setTimeout(function() {
 		http.Error(w, "Invalid access token", http.StatusInternalServerError)
 		return
 	}
-	log.Printf("OAuth2 authorization successful for %s and user %s", r.RemoteAddr, claims["unique_name"])
-	localToken := OauthConf.GenerateLocalToken(map[string]interface{}{"username": claims["unique_name"]})
+	log.Printf("OAuth2 authorization successful for %s and user %s", r.RemoteAddr, claims[server.options.OauthUsernameMapField])
+	localToken, _ := OauthConf.GenerateLocalToken(map[string]interface{}{"username": claims[server.options.OauthUsernameMapField]})
+	// exp := time.Unix(localClaims["exp"].(int64), 0)
 	http.SetCookie(w, &http.Cookie{
-		Name:     oauthCookieName,
-		Value:    localToken,
-		Path:     "/",
-		Expires:  tok.Expiry,
+		Name:  oauthCookieName,
+		Value: localToken,
+		Path:  "/",
+		// Expires:  exp,
 		HttpOnly: true,
 		SameSite: http.SameSiteLaxMode,
 	})
