@@ -69,15 +69,15 @@ func GenerateFlags(options ...interface{}) (flags []cli.Flag, mappings map[strin
 			case reflect.Slice:
 				// Handle slice type fields
 				if _, ok := field.Value().([]string); !ok {
-					log.Println("Warning: field", field.Name(), "is a slice but not of type []string, skipping flag generation")
+					log.Println("Warning: field ", field.Name(), " is a slice but not of type []string, skipping flag generation")
 					continue
 				}
 				flags = append(flags, &cli.StringSliceFlag{
 					Name:    flagName,
 					Usage:   flagDescription,
 					Aliases: alias,
-					Action: func(context *cli.Context, i []string) error {
-						log.Println(flagName + ": " + strings.Join(context.StringSlice(flagName), `, `))
+					Action: func(c *cli.Context, i []string) error {
+						log.Println(flagName + ": " + strings.Join(c.StringSlice(flagName), `, `))
 						err := field.Set(i)
 						if err != nil {
 							return err

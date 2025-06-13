@@ -305,7 +305,7 @@ func (server *Server) setupHandlers(ctx context.Context, cancel context.CancelFu
 	// OAuth2 configuration
 	if server.options.EnableOauth {
 		log.Printf("OAuth2 authentication enabled")
-		// process OauthClientID and OauthClientSecret loading from config file mu
+		// process OauthClientID and OauthClientSecret loading from config file
 		if server.options.OauthClientID == "" || server.options.OauthClientSecret == "" {
 			log.Fatalf("oauth2 is enabled, but no client ID or secret provided")
 		}
