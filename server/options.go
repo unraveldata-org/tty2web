@@ -67,7 +67,7 @@ type Options struct {
 	OauthDeviceAuthUrl    string   `hcl:"oauth_device_auth_url" flagName:"oauth-device-auth-url" flagDescribe:"OAuth device authorization URL for OAuth authentication" default:""`
 	OauthUsernameMapField string   `hcl:"oauth_username_map_field" flagName:"oauth-username-map-field" flagDescribe:"Field in the OAuth token to use as username (default: sub)" default:"unique_name"`
 	OauthGroupMapField    string   `hcl:"oauth_group_map_field" flagName:"oauth-group-map-field" flagDescribe:"Field in the OAuth token to use as group (default: groups)" default:"groups"`
-	JWTSecret             string   `hcl:"jwt_secret" flagName:"jwt-secret" flagDescribe:"JWT secret for JWT authentication if empty will generate on the fly" default:""`
+	JWTSecret             string   `hcl:"jwt_secret" flagName:"jwt-secret" flagDescribe:"JWT secret for JWT authentication if empty will generate at start" default:""`
 }
 
 func (options *Options) Validate() error {
