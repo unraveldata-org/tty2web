@@ -8,6 +8,7 @@ require (
 	github.com/fatih/structs v1.1.0
 	github.com/golang-jwt/jwt/v5 v5.2.2
 	github.com/gorilla/websocket v1.5.1
+	github.com/hashicorp/hcl v1.0.0
 	github.com/hashicorp/yamux v0.1.1
 	github.com/kost/dnstun v0.0.0-20230511164951-6e7f5656a900
 	github.com/kost/go-ntlmssp v0.0.0-20190601005913-a22bdd33b2a4
@@ -17,7 +18,6 @@ require (
 	github.com/pkg/errors v0.9.1
 	github.com/urfave/cli/v2 v2.27.5
 	github.com/xlzd/gotp v0.1.0
-	github.com/yudai/hcl v0.0.0-20151013225006-5fa2393b3552
 	golang.org/x/oauth2 v0.30.0
 )
 
@@ -26,18 +26,17 @@ require (
 	github.com/acomagu/bufpipe v1.0.4 // indirect
 	github.com/cpuguy83/go-md2man/v2 v2.0.5 // indirect
 	github.com/golang/protobuf v1.5.3 // indirect
-	github.com/hashicorp/errwrap v1.1.0 // indirect
-	github.com/hashicorp/go-multierror v1.1.1 // indirect
 	github.com/kost/chashell v0.0.0-20230409212000-cf0fbd106275 // indirect
 	github.com/miekg/dns v1.1.56 // indirect
 	github.com/rs/xid v1.5.0 // indirect
 	github.com/russross/blackfriday/v2 v2.1.0 // indirect
 	github.com/xrash/smetrics v0.0.0-20240521201337-686a1a2994c1 // indirect
 	golang.org/x/crypto v0.36.0 // indirect
-	golang.org/x/mod v0.14.0 // indirect
+	golang.org/x/mod v0.17.0 // indirect
 	golang.org/x/net v0.38.0 // indirect
+	golang.org/x/sync v0.12.0 // indirect
 	golang.org/x/sys v0.31.0 // indirect
-	golang.org/x/tools v0.14.0 // indirect
+	golang.org/x/tools v0.21.1-0.20240508182429-e35e4ccd0d2d // indirect
 	google.golang.org/protobuf v1.33.0 // indirect
 )
 

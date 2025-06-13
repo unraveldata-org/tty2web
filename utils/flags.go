@@ -7,8 +7,8 @@ import (
 	"strings"
 
 	"github.com/fatih/structs"
+	"github.com/hashicorp/hcl"
 	"github.com/urfave/cli/v2"
-	"github.com/yudai/hcl"
 
 	"github.com/kost/tty2web/pkg/homedir"
 )
