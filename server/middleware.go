@@ -2,12 +2,12 @@ package server
 
 import (
 	"encoding/base64"
+	"errors"
 	"log"
 	"net/http"
 	"strings"
 
 	"github.com/kost/tty2web/utils"
-	"github.com/pkg/errors"
 )
 
 func (server *Server) wrapLogger(handler http.Handler) http.Handler {

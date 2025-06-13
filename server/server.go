@@ -4,9 +4,10 @@ import (
 	"context"
 	"crypto/tls"
 	"crypto/x509"
+	"errors"
+	"fmt"
 	"html/template"
 	"io/fs"
-	"io/ioutil"
 	"log"
 	"net"
 	"net/http"
@@ -18,7 +19,6 @@ import (
 	"github.com/NYTimes/gziphandler"
 	"github.com/gorilla/websocket"
 	"github.com/kost/tty2web/utils"
-	"github.com/pkg/errors"
 	"golang.org/x/oauth2"
 
 	"github.com/kost/httpexecute"
@@ -54,9 +54,9 @@ func New(factory Factory, options *Options) (*Server, error) {
 	}
 	if options.IndexFile != "" {
 		path := homedir.Expand(options.IndexFile)
-		indexData, err = ioutil.ReadFile(path)
+		indexData, err = os.ReadFile(path)
 		if err != nil {
-			return nil, errors.Wrapf(err, "failed to read custom index file at `%s`", path)
+			return nil, fmt.Errorf("failed to read custom index file at `%s`: %w", path, err)
 		}
 	}
 	indexTemplate, err := template.New("index").Parse(string(indexData))
@@ -66,14 +66,14 @@ func New(factory Factory, options *Options) (*Server, error) {
 
 	titleTemplate, err := noesctmpl.New("title").Parse(options.TitleFormat)
 	if err != nil {
-		return nil, errors.Wrapf(err, "failed to parse window title format `%s`", options.TitleFormat)
+		return nil, fmt.Errorf("failed to parse window title format `%s`: %w", options.TitleFormat, err)
 	}
 
 	var originChekcer func(r *http.Request) bool
 	if options.WSOrigin != "" {
 		matcher, err := regexp.Compile(options.WSOrigin)
 		if err != nil {
-			return nil, errors.Wrapf(err, "failed to compile regular expression of Websocket Origin: %s", options.WSOrigin)
+			return nil, fmt.Errorf("failed to compile regular expression of Websocket Origin: %s: %w", options.WSOrigin, err)
 		}
 		originChekcer = func(r *http.Request) bool {
 			return matcher.MatchString(r.Header.Get("Origin"))
@@ -118,7 +118,7 @@ func (server *Server) Run(ctx context.Context, options ...RunOption) error {
 	handlers := server.setupHandlers(cctx, cancel, path, counter)
 	srv, err := server.setupHTTPServer(handlers)
 	if err != nil {
-		return errors.Wrapf(err, "failed to setup an HTTP server")
+		return fmt.Errorf("failed to setup an HTTP server: %w", err)
 	}
 
 	if server.options.PermitWrite {
@@ -145,7 +145,7 @@ func (server *Server) Run(ctx context.Context, options ...RunOption) error {
 
 			cer, err = tlshelp.GetRandomTLS(2048)
 			if err != nil {
-				return errors.Wrapf(err, "error generating and failed to load tls cert and key `%s` and `%s`", crtFile, keyFile)
+				return fmt.Errorf("error generating and failed to load tls cert and key `%s` and `%s`: %w", crtFile, keyFile, err)
 			}
 		}
 		config := &tls.Config{Certificates: []tls.Certificate{cer}}
@@ -173,7 +173,7 @@ func (server *Server) Run(ctx context.Context, options ...RunOption) error {
 			hostPort := net.JoinHostPort(server.options.Address, server.options.Port)
 			listener, err := net.Listen("tcp", hostPort)
 			if err != nil {
-				return errors.Wrapf(err, "failed to listen at `%s`", hostPort)
+				return fmt.Errorf("failed to listen at `%s`: %w", hostPort, err)
 			}
 
 			scheme := "http"
@@ -227,7 +227,7 @@ func (server *Server) Run(ctx context.Context, options ...RunOption) error {
 
 	select {
 	case err = <-srvErr:
-		if err == http.ErrServerClosed { // by gracefull ctx
+		if errors.Is(err, http.ErrServerClosed) { // by gracefull ctx
 			err = nil
 		} else {
 			cancel()
@@ -359,7 +359,7 @@ func (server *Server) setupHTTPServer(handler http.Handler) (*http.Server, error
 	if server.options.EnableTLSClientAuth {
 		tlsConfig, err := server.tlsConfig()
 		if err != nil {
-			return nil, errors.Wrapf(err, "failed to setup TLS configuration")
+			return nil, fmt.Errorf("failed to setup TLS configuration: %w", err)
 		}
 		srv.TLSConfig = tlsConfig
 	}
@@ -369,7 +369,7 @@ func (server *Server) setupHTTPServer(handler http.Handler) (*http.Server, error
 
 func (server *Server) tlsConfig() (*tls.Config, error) {
 	caFile := homedir.Expand(server.options.TLSCACrtFile)
-	caCert, err := ioutil.ReadFile(caFile)
+	caCert, err := os.ReadFile(caFile)
 	if err != nil {
 		return nil, errors.New("could not open CA crt file " + caFile)
 	}
