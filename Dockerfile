@@ -4,7 +4,7 @@ COPY . /go/src/github.com/unravel-data/tty2web
 WORKDIR /go/src/github.com/unravel-data/tty2web
 RUN go build -o /go/bin/tty2web -v -trimpath -ldflags "-w -s" .
 
-FROM ubuntu:latest
+FROM rockylinux/rockylinux:10
 
 ARG TARGETARCH
 
@@ -13,8 +13,8 @@ LABEL org.opencontainers.image.vendor="Unravel Data, Inc." \
       org.opencontainers.image.title="tty2web"
 
 COPY --from=builder /go/bin/tty2web /usr/local/bin/tty2web
-RUN apt-get update && \
-    apt-get install -y ca-certificates && \
-    rm -rf /var/lib/apt/lists/*
+RUN dnf install -y nano \
+    && dnf clean all \
+    && rm -rf /var/cache/dnf/*
 
 ENTRYPOINT ["tty2web"]
