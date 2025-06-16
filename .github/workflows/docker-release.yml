@@ -35,7 +35,7 @@ jobs:
           echo "COMMIT_HASH=${COMMIT_HASH}" >> $GITHUB_ENV
           echo "RELEASE_DATE=${RELEASE_DATE}" >> $GITHUB_ENV
           echo "TAG=${TAG}" >> $GITHUB_ENV
-          echo $CR_PAT | docker login ghcr.io -u USERNAME --password-stdin
+          echo $CR_PAT | docker login ghcr.io -u jenkins-unraveldata --password-stdin
 
       - name: Build Docker image
         uses: docker/build-push-action@v5
