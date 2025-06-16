@@ -17,6 +17,11 @@ jobs:
           ref: CLOUD-1157-oauth2-support
           token: ${{ secrets.UNRAVEL_BUILDER_GH_TOKEN }}
 
+      - name: Setup Git
+        run: |
+          git config user.name "jenkins-unraveldata"
+          git config user.email "jenkins@unraveldata.com"
+
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
@@ -24,13 +29,16 @@ jobs:
         run: |
           COMMIT_HASH=$(git rev-parse --short HEAD)
           RELEASE_DATE=$(date +%Y%m%d)
-          TAG="tty2web-${DATE}-${COMMIT_HASH}"
+          TAG="tty2web-${RELEASE_DATE}-${COMMIT_HASH}"
           echo "COMMIT_HASH=${COMMIT_HASH}" >> $GITHUB_ENV
           echo "RELEASE_DATE=${RELEASE_DATE}" >> $GITHUB_ENV
           echo "TAG=${TAG}" >> $GITHUB_ENV
+          
 
       - name: Build Docker image
         uses: docker/build-push-action@v5
+        env:
+          CR_PAT: ${{ secrets.UNRAVEL_BUILDER_GH_TOKEN }}
         with:
           github-token: ${{ secrets.UNRAVEL_BUILDER_GH_TOKEN }}
           context: .
