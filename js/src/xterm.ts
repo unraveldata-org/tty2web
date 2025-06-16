@@ -3,6 +3,7 @@ import { FitAddon } from '@xterm/addon-fit';
 import { WebLinksAddon } from '@xterm/addon-web-links';
 import { WebglAddon } from '@xterm/addon-webgl';
 import { ColorTerm } from './colorTerm';
+import { lib } from "libapps"
 
 const terminal = new Terminal()
 terminal.loadAddon(new FitAddon());
@@ -12,6 +13,7 @@ export class Xterm {
     elem: HTMLElement;
     term: Terminal;
     resizeListener: () => void;
+    decoder: lib.UTF8Decoder;
 
     message: HTMLElement;
     messageTimeout: number;
@@ -43,6 +45,7 @@ export class Xterm {
         this.term.focus();
         this.resizeListener();
         window.addEventListener("resize", () => { this.resizeListener(); });
+        this.decoder = new lib.UTF8Decoder();
     };
 
     info(): { columns: number, rows: number } {
@@ -50,7 +53,7 @@ export class Xterm {
     };
 
     output(data: string) {
-        this.term.write(ColorTerm.colorize(data));
+        this.term.write(ColorTerm.colorize(this.decoder.decode(data)));
     };
 
     showMessage(message: string, timeout: number) {

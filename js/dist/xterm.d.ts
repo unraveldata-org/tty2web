@@ -1,8 +1,10 @@
 import { Terminal } from '@xterm/xterm';
+import { lib } from "libapps";
 export declare class Xterm {
     elem: HTMLElement;
     term: Terminal;
     resizeListener: () => void;
+    decoder: lib.UTF8Decoder;
     message: HTMLElement;
     messageTimeout: number;
     messageTimer: number;
