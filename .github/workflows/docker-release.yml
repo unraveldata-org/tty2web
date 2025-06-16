@@ -50,7 +50,7 @@ jobs:
 
       - name: Create a tag
         run: |
-          sed -i "s/var Version = \"unknown_version\"/var Version = \"${DATE}\"/g" version.go
+          sed -i "s/var Version = \"unknown_version\"/var Version = \"${RELEASE_DATE}\"/g" version.go
           sed -i "s/var CommitID = \"unknown_commit\"/var CommitID = \"${COMMIT_HASH}\"/g" version.go
           git add version.go
           git commit -m "Release ${TAG}"
