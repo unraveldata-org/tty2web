@@ -1,0 +1,51 @@
+name: Build Release Docker Image
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+    inputs:
+      branch:
+        default: 'CLOUD-1157-oauth2-support'
+        description: 'Branch to build from'
+        required: false
+        type: string
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-tags: 'true'
+          ref: ${{ inputs.branch }}
+          token: ${{ secrets.UNRAVEL_BUILDER_GH_TOKEN }}
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Prepare docker tag
+        run: |
+          COMMIT_HASH=$(git rev-parse --short HEAD)
+          RELEASE_DATE=$(date +%Y%m%d)
+          TAG="tty2web-${DATE}-${COMMIT_HASH}"
+          echo "COMMIT_HASH=${COMMIT_HASH}" >> $GITHUB_ENV
+          echo "RELEASE_DATE=${RELEASE_DATE}" >> $GITHUB_ENV
+          echo "TAG=${TAG}" >> $GITHUB_ENV
+
+      - name: Build Docker image
+        uses: docker/build-push-action@v5
+        with:
+          github-token: ${{ secrets.UNRAVEL_BUILDER_GH_TOKEN }}
+          context: .
+          push: true
+          tags: ghcr.io/unraveldata-org/tty2web:latest, ghcr.io/unraveldata-org/tty2web:${{ env.TAG }}
+
+      - name: Create a tag
+        run: |
+          sed -i "s/var Version = \"unknown_version\"/var Version = \"${DATE}\"/g" version.go
+          sed -i "s/var CommitID = \"unknown_commit\"/var CommitID = \"${COMMIT_HASH}\"/g" version.go
+          git tag -a "${TAG}" -m "Release ${TAG}"
+          git push origin "${TAG}"
