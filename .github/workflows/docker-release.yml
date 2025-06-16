@@ -44,7 +44,6 @@ jobs:
       - name: Build Docker image
         uses: docker/build-push-action@v5
         with:
-          github-token: ${{ secrets.UNRAVEL_BUILDER_GH_TOKEN }}
           context: .
           push: true
           tags: ghcr.io/unraveldata-org/tty2web:latest, ghcr.io/unraveldata-org/tty2web:${{ env.TAG }}
@@ -53,5 +52,5 @@ jobs:
         run: |
           sed -i "s/var Version = \"unknown_version\"/var Version = \"${DATE}\"/g" version.go
           sed -i "s/var CommitID = \"unknown_commit\"/var CommitID = \"${COMMIT_HASH}\"/g" version.go
-          git tag -a "${TAG}" -m "Release ${TAG}"
-          git push origin "${TAG}"
+          git tag -f -a "${TAG}" -m "Release ${TAG}"
+          git push -f origin "${TAG}"
