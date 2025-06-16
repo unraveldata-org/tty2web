@@ -13,5 +13,8 @@ LABEL org.opencontainers.image.vendor="Unravel Data, Inc." \
       org.opencontainers.image.title="tty2web"
 
 COPY --from=builder /go/bin/tty2web /usr/local/bin/tty2web
+RUN apt-get update && \
+    apt-get install -y ca-certificates && \
+    rm -rf /var/lib/apt/lists/*
 
 ENTRYPOINT ["tty2web"]
