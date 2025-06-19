@@ -2,7 +2,6 @@ package server
 
 import (
 	"encoding/base64"
-	"errors"
 	"log"
 	"net/http"
 	"regexp"
@@ -75,29 +74,11 @@ func (server *Server) wrapOauth2(handler http.Handler) http.Handler {
 				return
 			}
 		}
-		// check for Authorization header
-		token := strings.SplitN(r.Header.Get("Authorization"), " ", 2)
-		if len(token) == 2 && strings.ToLower(token[0]) == "JWT" {
-			// validate JWT token
-			if _, err := OauthConf.ValidateLocalToken(token[1]); err == nil {
-				handler.ServeHTTP(w, r)
-				return
-			}
-		}
 
-		// check for authentication in cookie
-		cookie, err := r.Cookie(oauthCookieName)
-		if err != nil && !errors.Is(err, http.ErrNoCookie) {
-			log.Println("Error getting cookies:", err)
-			http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+		_, err := utils.OauthTokenCheck(w, r, OauthConf, handler, oauthCookieName)
+		if err == nil {
+			log.Printf("OAuth2 Authentication Succeeded: %s access %s", r.RemoteAddr, r.URL.Path)
 			return
-		} else if cookie != nil {
-			_, err = OauthConf.ValidateLocalToken(cookie.Value)
-			if err == nil {
-				log.Printf("auth cookie value: %s", cookie.Value)
-				handler.ServeHTTP(w, r)
-				return
-			}
 		}
 
 		utils.OauthMissingResponse(w, r, OauthConf)

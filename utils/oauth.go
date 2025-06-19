@@ -124,6 +124,34 @@ func (c *OAuth2Config) GetLocalTokenField(token, fieldName string) interface{} {
 	return nil
 }
 
+func OauthTokenCheck(w http.ResponseWriter, r *http.Request, OauthConf *OAuth2Config, handler http.Handler, oauthCookieName string) (token *oauth2.Token, err error) {
+	// check for Authorization header
+	t := strings.SplitN(r.Header.Get("Authorization"), " ", 2)
+	if len(t) == 2 && strings.ToLower(t[0]) == "JWT" {
+		// validate JWT token
+		if token, err := OauthConf.ValidateLocalToken(t[1]); err == nil {
+			handler.ServeHTTP(w, r)
+			return token, nil
+		}
+	}
+
+	// check for authentication in cookie
+	cookie, err := r.Cookie(oauthCookieName)
+	if err != nil && !errors.Is(err, http.ErrNoCookie) {
+		log.Println("Error getting cookies:", err)
+		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+		return nil, err
+	} else if cookie != nil {
+		token, err = OauthConf.ValidateLocalToken(cookie.Value)
+		if err == nil {
+			log.Printf("auth cookie value: %s", cookie.Value)
+			handler.ServeHTTP(w, r)
+			return token, nil
+		}
+	}
+	return nil, errors.New("no valid token found")
+}
+
 // OauthMissingResponse sends a response indicating that the OAuth2 token is missing or invalid.
 func OauthMissingResponse(w http.ResponseWriter, r *http.Request, OauthConf *OAuth2Config) {
 	w.Header().Set("WWW-Authenticate", `JWT realm="tty2web"`)
