@@ -13,6 +13,9 @@ LABEL org.opencontainers.image.vendor="Unravel Data, Inc." \
       org.opencontainers.image.title="tty2web"
 
 COPY --from=builder /go/bin/tty2web /usr/local/bin/tty2web
+
+ENV TERM=xterm-256color
+
 RUN dnf install -y nano procps-ng \
     && dnf clean all \
     && rm -rf /var/cache/dnf/*
