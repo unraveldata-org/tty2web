@@ -5,6 +5,7 @@ import (
 	"errors"
 	"log"
 	"net/http"
+	"regexp"
 	"strings"
 
 	"github.com/kost/tty2web/utils"
@@ -56,18 +57,18 @@ func (server *Server) wrapBasicAuth(handler http.Handler, credential string) htt
 // OAuth2 middleware
 func (server *Server) wrapOauth2(handler http.Handler) http.Handler {
 	noneAuthPaths := []string{
-		"/oauth/callback",
-		"/oauth/login",
-		"/oauth/logout",
-		"/static/",
-		"/favicon.ico",
-		"/js/",
-		"/css/",
+		".*/oauth/callback",
+		".*/oauth/login",
+		".*/oauth/logout",
+		".*/static/.*",
+		".*/favicon.ico",
+		".*/js/.*",
+		".*/css/.*",
 	}
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		// Check if the request path is in the list of paths that do not require authentication
 		for _, path := range noneAuthPaths {
-			if strings.HasPrefix(r.URL.Path, path) {
+			if matched, _ := regexp.MatchString(path, r.URL.Path); matched {
 				// If the path is in the list, skip authentication
 				handler.ServeHTTP(w, r)
 				return
