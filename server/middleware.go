@@ -75,9 +75,10 @@ func (server *Server) wrapOauth2(handler http.Handler) http.Handler {
 			}
 		}
 
-		_, err := utils.OauthTokenCheck(w, r, OauthConf, handler, oauthCookieName)
+		_, err := utils.OauthTokenCheck(w, r, OauthConf, oauthCookieName)
 		if err == nil {
 			log.Printf("OAuth2 Authentication Succeeded: %s access %s", r.RemoteAddr, r.URL.Path)
+			handler.ServeHTTP(w, r)
 			return
 		}
 

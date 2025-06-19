@@ -124,13 +124,12 @@ func (c *OAuth2Config) GetLocalTokenField(token, fieldName string) interface{} {
 	return nil
 }
 
-func OauthTokenCheck(w http.ResponseWriter, r *http.Request, OauthConf *OAuth2Config, handler http.Handler, oauthCookieName string) (token *oauth2.Token, err error) {
+func OauthTokenCheck(w http.ResponseWriter, r *http.Request, OauthConf *OAuth2Config, oauthCookieName string) (token *oauth2.Token, err error) {
 	// check for Authorization header
 	t := strings.SplitN(r.Header.Get("Authorization"), " ", 2)
 	if len(t) == 2 && strings.ToLower(t[0]) == "JWT" {
 		// validate JWT token
 		if token, err := OauthConf.ValidateLocalToken(t[1]); err == nil {
-			handler.ServeHTTP(w, r)
 			return token, nil
 		}
 	}
@@ -145,7 +144,6 @@ func OauthTokenCheck(w http.ResponseWriter, r *http.Request, OauthConf *OAuth2Co
 		token, err = OauthConf.ValidateLocalToken(cookie.Value)
 		if err == nil {
 			log.Printf("auth cookie value: %s", cookie.Value)
-			handler.ServeHTTP(w, r)
 			return token, nil
 		}
 	}
