@@ -15,6 +15,11 @@ LABEL org.opencontainers.image.vendor="Unravel Data, Inc." \
 COPY --from=builder /go/bin/tty2web /usr/local/bin/tty2web
 RUN dnf install -y nano \
     && dnf clean all \
-    && rm -rf /var/cache/dnf/*
+    && rm -rf /var/cache/dnf/* \
+RUN groupadd -r unravel && useradd -u 1000 -m -s /bin/bash -g unravel unravel
+RUN groupadd -r hadoop && useradd -u 1001 -m -s /bin/bash -g hadoop hadoop
+RUN groupadd -r hdfs && useradd -u 1002 -m -s /bin/bash -g hdfs hdfs
+
+USER unravel
 
 ENTRYPOINT ["tty2web"]

@@ -355,6 +355,11 @@ func (server *Server) handleOauthCallBack(w http.ResponseWriter, r *http.Request
 		log.Printf("Warning: OAuth2 cookie size (%d bytes) exceeds the limit of 4096 bytes. Consider using a shorter token or reducing cookie attributes.", sizeOfCookie)
 	}
 	w.Header().Set("Content-Type", "text/html")
+	// get base path
+	p := "/"
+	if server.options.Url != "" {
+		p = "/" + server.options.Url + "/"
+	}
 	body := fmt.Sprintf(`
 <!DOCTYPE html>
 <html>
@@ -374,7 +379,8 @@ setTimeout(function() {
 </html>
 `,
 		"Login Successful",
-		"/")
+		p,
+	)
 	w.Write([]byte(body))
 	w.WriteHeader(http.StatusOK)
 }
