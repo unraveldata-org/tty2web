@@ -62,6 +62,7 @@ func (server *Server) wrapOauth2(handler http.Handler) http.Handler {
 		".*/oauth/logout",
 		".*/static/.*",
 		".*/favicon.ico",
+		".*/favicon.png",
 		".*/js/.*",
 		".*/css/.*",
 	}
