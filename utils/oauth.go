@@ -15,8 +15,9 @@ import (
 
 // OAuth2Config holds the configuration for OAuth2 authentication
 type OAuth2Config struct {
-	config    oauth2.Config
-	jwtSecret string
+	config             oauth2.Config
+	jwtSecret          string
+	DefaultValidPeriod time.Duration
 }
 
 func (c *OAuth2Config) GetClientID() string {
@@ -37,6 +38,10 @@ func (c *OAuth2Config) GetScopes() []string {
 
 func (c *OAuth2Config) GetLoginUrl() string {
 	return c.config.AuthCodeURL("")
+}
+
+func (c *OAuth2Config) SetDefaultValidPeriod(dur time.Duration) {
+	c.DefaultValidPeriod = dur
 }
 
 // Exchange exchanges the authorization code for an access token using the OAuth2 configuration.
@@ -90,9 +95,9 @@ func (c *OAuth2Config) GenerateLocalToken(fields map[string]interface{}) (localT
 	// Set the claims for the token
 	claims = token.Claims.(jwt.MapClaims)
 	claims["iss"] = "tty2web"
-	claims["exp"] = time.Now().Add(time.Hour * 24).Unix() // Set expiration to 24 hours
-	claims["iat"] = time.Now().Unix()                     // Set issued at time to now
-	claims["nbf"] = time.Now().Unix()                     // Set not before time to now
+	claims["exp"] = time.Now().Add(c.DefaultValidPeriod).Unix() // Set expiration
+	claims["iat"] = time.Now().Unix()                           // Set issued at time to now
+	claims["nbf"] = time.Now().Unix()                           // Set not before time to now
 	for key, value := range fields {
 		claims[key] = value // Add custom fields to the claims
 	}
@@ -196,7 +201,8 @@ func NewOAuth2Config(clientID, clientSecret, redirectURL, jwtSecret string, scop
 	}
 
 	return &OAuth2Config{
-		jwtSecret: jwtSecret,
+		DefaultValidPeriod: time.Hour * 8,
+		jwtSecret:          jwtSecret,
 		config: oauth2.Config{
 			ClientID:     clientID,
 			ClientSecret: clientSecret,
