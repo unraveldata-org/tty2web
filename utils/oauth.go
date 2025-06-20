@@ -141,6 +141,7 @@ func OauthTokenCheck(w http.ResponseWriter, r *http.Request, OauthConf *OAuth2Co
 		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
 		return nil, err
 	} else if cookie != nil {
+		//	PrintCookieValue(r, oauthCookieName)
 		token, err = OauthConf.ValidateLocalToken(cookie.Value)
 		if err == nil {
 			log.Printf("auth cookie value: %s", cookie.Value)
@@ -158,6 +159,18 @@ func OauthMissingResponse(w http.ResponseWriter, r *http.Request, OauthConf *OAu
 	loginUrl := OauthConf.GetLoginUrl()
 	w.Write([]byte("<html>Please login: <a href=\"" + loginUrl + "\">Link</a></html>"))
 	return
+}
+func PrintCookieValue(r *http.Request, cookieName string) {
+	cookie, err := r.Cookie(cookieName)
+	if err != nil {
+		if errors.Is(err, http.ErrNoCookie) {
+			log.Printf("Cookie '%s' not found in the request.\n", cookieName)
+		} else {
+			log.Printf("Error reading cookie '%s': %v\n", cookieName, err)
+		}
+		return
+	}
+	log.Printf("The value of cookie '%s' is: %s\n", cookieName, cookie.Value)
 }
 
 // DecodeOauthTokenUnsafe decodes a JWT token without validating its signature.
