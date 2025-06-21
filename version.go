@@ -1,4 +1,4 @@
 package main
 
-var Version = "unknown_version"
-var CommitID = "unknown_commit"
+var Version = "20250621"
+var CommitID = "7dd7b72"
