@@ -126,6 +126,17 @@ Point your web browser to <http://127.0.0.1:8000>
    --otp                         One time password secret for terminal (default: "")
    --otp-interval                Interval for one time password (default: 180)
    --otp-digits                  Digits for one time password (default: 8)
+   --oauth-client-id value       OAuth2 client ID for authentication [$TTY2WEB_OAUTH_CLIENT_ID]
+   --oauth-client-secret value   OAuth2 client secret for authentication [$TTY2WEB_OAUTH_CLIENT_SECRET]
+   --oauth                       Enable OAuth authentication (default: false) [$TTY2WEB_OAUTH]
+   --oauth-redirect-url value    OAuth redirect URL for OAuth authentication [$TTY2WEB_OAUTH_REDIRECT_URL]
+   --oauth-scopes value          OAuth scopes for OAuth authentication (default: "read") [$TTY2WEB_OAUTH_SCOPES]
+   --oauth-auth-url value        OAuth authorization URL for OAuth authentication [$TTY2WEB_OAUTH_AUTH_URL]
+   --oauth-token-url value       OAuth token URL for OAuth authentication [$TTY2WEB_OAUTH_TOKEN_URL]
+   --oauth-device-auth-url value OAuth device authorization URL for OAuth authentication [$TTY2WEB_OAUTH_DEVICE_AUTH_URL]
+   --oauth-username-map-field     Field in the OAuth token to use as username (default: unique_name) [$TTY2WEB_OAUTH_USERNAME_MAP_FIELD]
+   --oauth-group-map-field        Field in the OAuth token to use as group (default: groups) [$TTY2WEB_OAUTH_GROUP_MAP_FIELD]
+   --jwt-secret value            JWT secret for JWT authentication if empty will generate at start [$TTY2WEB_JWT_SECRET]
    --help                        Displays help (default: false)
    --version, -v                 print the version
 ```
