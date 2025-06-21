@@ -1,14 +1,17 @@
 package utils
 
 import (
+	"bytes"
 	"context"
 	"crypto/rand"
+	"html/template"
 	"log"
 	"net/http"
 	"strings"
 	"time"
 
 	"github.com/golang-jwt/jwt/v5"
+	"github.com/kost/tty2web/bindata"
 	"github.com/pkg/errors"
 	"golang.org/x/oauth2"
 )
@@ -18,6 +21,7 @@ type OAuth2Config struct {
 	config             oauth2.Config
 	jwtSecret          string
 	DefaultValidPeriod time.Duration
+	LoginTemplate      *template.Template
 }
 
 func (c *OAuth2Config) GetClientID() string {
@@ -161,7 +165,16 @@ func OauthMissingResponse(w http.ResponseWriter, r *http.Request, OauthConf *OAu
 	w.WriteHeader(http.StatusUnauthorized)
 	// set redirect URL to the OAuth2 login page
 	loginUrl := OauthConf.GetLoginUrl()
-	w.Write([]byte("<html>Please login: <a href=\"" + loginUrl + "\">Link</a></html>"))
+	buf := new(bytes.Buffer)
+	err := OauthConf.LoginTemplate.Execute(buf, map[string]interface{}{
+		"loginUrl": loginUrl,
+	})
+	if err != nil {
+		log.Println("Error executing login template:", err)
+		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+		return
+	}
+	w.Write(buf.Bytes())
 	return
 }
 
@@ -184,6 +197,15 @@ func DecodeOauthTokenUnsafe(token string) (map[string]interface{}, error) {
 
 // NewOAuth2Config creates a new OAuth2Config with the provided parameters
 func NewOAuth2Config(clientID, clientSecret, redirectURL, jwtSecret string, scopes []string, endpoint oauth2.Endpoint) *OAuth2Config {
+	loginData, err := bindata.Fs.ReadFile("static/oauth_login.html")
+	if err != nil {
+		panic("oauth_login.html not found") // must be in bindata
+	}
+	loginTemplate, err := template.New("oauth_login").Parse(string(loginData))
+	if err != nil {
+		panic("oauth login template parse failed: " + err.Error())
+	}
+
 	if clientID == "" || clientSecret == "" || redirectURL == "" {
 		log.Println("OAuth2 configuration is incomplete. Please provide clientID, clientSecret, and redirectURL.")
 		return nil
@@ -201,6 +223,7 @@ func NewOAuth2Config(clientID, clientSecret, redirectURL, jwtSecret string, scop
 	}
 
 	return &OAuth2Config{
+		LoginTemplate:      loginTemplate,
 		DefaultValidPeriod: time.Hour * 8,
 		jwtSecret:          jwtSecret,
 		config: oauth2.Config{
