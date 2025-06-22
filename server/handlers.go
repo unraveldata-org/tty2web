@@ -182,7 +182,8 @@ func (server *Server) processWSConn(ctx context.Context, conn *websocket.Conn, o
 		return fmt.Errorf("failed to create webtty: %w", err)
 	}
 
-	return tty.Run(ctx)
+	err = tty.Run(ctx)
+	return err
 }
 
 func (server *Server) handleIndex(w http.ResponseWriter, r *http.Request) {

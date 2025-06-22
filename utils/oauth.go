@@ -124,7 +124,7 @@ func (c *OAuth2Config) GetLocalTokenField(token, fieldName string) interface{} {
 	return nil
 }
 
-func OauthTokenCheck(w http.ResponseWriter, r *http.Request, OauthConf *OAuth2Config, oauthCookieName string) (token *oauth2.Token, err error) {
+func OauthTokenCheck(w http.ResponseWriter, r *http.Request, OauthConf *OAuth2Config, oauthCookieValue string) (token *oauth2.Token, err error) {
 	// check for Authorization header
 	t := strings.SplitN(r.Header.Get("Authorization"), " ", 2)
 	if len(t) == 2 && strings.ToLower(t[0]) == "JWT" {
@@ -135,13 +135,12 @@ func OauthTokenCheck(w http.ResponseWriter, r *http.Request, OauthConf *OAuth2Co
 	}
 
 	// check for authentication in cookie
-	cookie, err := r.Cookie(oauthCookieName)
+	cookie, err := r.Cookie(oauthCookieValue)
 	if err != nil && !errors.Is(err, http.ErrNoCookie) {
 		log.Println("Error getting cookies:", err)
 		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
 		return nil, err
 	} else if cookie != nil {
-		//	PrintCookieValue(r, oauthCookieName)
 		token, err = OauthConf.ValidateLocalToken(cookie.Value)
 		if err == nil {
 			log.Printf("auth cookie value: %s", cookie.Value)
@@ -159,18 +158,6 @@ func OauthMissingResponse(w http.ResponseWriter, r *http.Request, OauthConf *OAu
 	loginUrl := OauthConf.GetLoginUrl()
 	w.Write([]byte("<html>Please login: <a href=\"" + loginUrl + "\">Link</a></html>"))
 	return
-}
-func PrintCookieValue(r *http.Request, cookieName string) {
-	cookie, err := r.Cookie(cookieName)
-	if err != nil {
-		if errors.Is(err, http.ErrNoCookie) {
-			log.Printf("Cookie '%s' not found in the request.\n", cookieName)
-		} else {
-			log.Printf("Error reading cookie '%s': %v\n", cookieName, err)
-		}
-		return
-	}
-	log.Printf("The value of cookie '%s' is: %s\n", cookieName, cookie.Value)
 }
 
 // DecodeOauthTokenUnsafe decodes a JWT token without validating its signature.
