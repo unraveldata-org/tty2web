@@ -124,7 +124,7 @@ func (c *OAuth2Config) GetLocalTokenField(token, fieldName string) interface{} {
 	return nil
 }
 
-func OauthTokenCheck(w http.ResponseWriter, r *http.Request, OauthConf *OAuth2Config, oauthCookieValue string) (token *oauth2.Token, err error) {
+func OauthTokenCheck(w http.ResponseWriter, r *http.Request, OauthConf *OAuth2Config, oauthCookieName string) (token *oauth2.Token, err error) {
 	// check for Authorization header
 	t := strings.SplitN(r.Header.Get("Authorization"), " ", 2)
 	if len(t) == 2 && strings.ToLower(t[0]) == "JWT" {
@@ -135,7 +135,7 @@ func OauthTokenCheck(w http.ResponseWriter, r *http.Request, OauthConf *OAuth2Co
 	}
 
 	// check for authentication in cookie
-	cookie, err := r.Cookie(oauthCookieValue)
+	cookie, err := r.Cookie(oauthCookieName)
 	if err != nil && !errors.Is(err, http.ErrNoCookie) {
 		log.Println("Error getting cookies:", err)
 		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
