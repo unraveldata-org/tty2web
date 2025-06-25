@@ -1,22 +1,27 @@
 package utils
 
 import (
+	"bytes"
 	"context"
 	"crypto/rand"
+	"html/template"
 	"log"
 	"net/http"
 	"strings"
 	"time"
 
 	"github.com/golang-jwt/jwt/v5"
+	"github.com/kost/tty2web/bindata"
 	"github.com/pkg/errors"
 	"golang.org/x/oauth2"
 )
 
 // OAuth2Config holds the configuration for OAuth2 authentication
 type OAuth2Config struct {
-	config    oauth2.Config
-	jwtSecret string
+	config             oauth2.Config
+	jwtSecret          string
+	DefaultValidPeriod time.Duration
+	LoginTemplate      *template.Template
 }
 
 func (c *OAuth2Config) GetClientID() string {
@@ -37,6 +42,10 @@ func (c *OAuth2Config) GetScopes() []string {
 
 func (c *OAuth2Config) GetLoginUrl() string {
 	return c.config.AuthCodeURL("")
+}
+
+func (c *OAuth2Config) SetDefaultValidPeriod(dur time.Duration) {
+	c.DefaultValidPeriod = dur
 }
 
 // Exchange exchanges the authorization code for an access token using the OAuth2 configuration.
@@ -90,9 +99,9 @@ func (c *OAuth2Config) GenerateLocalToken(fields map[string]interface{}) (localT
 	// Set the claims for the token
 	claims = token.Claims.(jwt.MapClaims)
 	claims["iss"] = "tty2web"
-	claims["exp"] = time.Now().Add(time.Hour * 24).Unix() // Set expiration to 24 hours
-	claims["iat"] = time.Now().Unix()                     // Set issued at time to now
-	claims["nbf"] = time.Now().Unix()                     // Set not before time to now
+	claims["exp"] = time.Now().Add(c.DefaultValidPeriod).Unix() // Set expiration
+	claims["iat"] = time.Now().Unix()                           // Set issued at time to now
+	claims["nbf"] = time.Now().Unix()                           // Set not before time to now
 	for key, value := range fields {
 		claims[key] = value // Add custom fields to the claims
 	}
@@ -156,7 +165,16 @@ func OauthMissingResponse(w http.ResponseWriter, r *http.Request, OauthConf *OAu
 	w.WriteHeader(http.StatusUnauthorized)
 	// set redirect URL to the OAuth2 login page
 	loginUrl := OauthConf.GetLoginUrl()
-	w.Write([]byte("<html>Please login: <a href=\"" + loginUrl + "\">Link</a></html>"))
+	buf := new(bytes.Buffer)
+	err := OauthConf.LoginTemplate.Execute(buf, map[string]interface{}{
+		"loginUrl": loginUrl,
+	})
+	if err != nil {
+		log.Println("Error executing login template:", err)
+		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+		return
+	}
+	w.Write(buf.Bytes())
 	return
 }
 
@@ -179,6 +197,15 @@ func DecodeOauthTokenUnsafe(token string) (map[string]interface{}, error) {
 
 // NewOAuth2Config creates a new OAuth2Config with the provided parameters
 func NewOAuth2Config(clientID, clientSecret, redirectURL, jwtSecret string, scopes []string, endpoint oauth2.Endpoint) *OAuth2Config {
+	loginData, err := bindata.Fs.ReadFile("static/oauth_login.html")
+	if err != nil {
+		panic("oauth_login.html not found") // must be in bindata
+	}
+	loginTemplate, err := template.New("oauth_login").Parse(string(loginData))
+	if err != nil {
+		panic("oauth login template parse failed: " + err.Error())
+	}
+
 	if clientID == "" || clientSecret == "" || redirectURL == "" {
 		log.Println("OAuth2 configuration is incomplete. Please provide clientID, clientSecret, and redirectURL.")
 		return nil
@@ -196,7 +223,9 @@ func NewOAuth2Config(clientID, clientSecret, redirectURL, jwtSecret string, scop
 	}
 
 	return &OAuth2Config{
-		jwtSecret: jwtSecret,
+		LoginTemplate:      loginTemplate,
+		DefaultValidPeriod: time.Hour * 8,
+		jwtSecret:          jwtSecret,
 		config: oauth2.Config{
 			ClientID:     clientID,
 			ClientSecret: clientSecret,
