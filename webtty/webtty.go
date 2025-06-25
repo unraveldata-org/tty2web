@@ -42,10 +42,12 @@ type WebTTY struct {
 	oauthCookieValue string
 }
 
+// Checks if user is giving UpArrow or DownArrow as input
 func isArrowKey(data []byte) bool {
 	return string(data) == "\x1b[A" || string(data) == "\x1b[B"
 }
 
+// Extract the "username" from JWT token
 func (wt *WebTTY) getUsernameFromJWT() string {
 	if wt.jwtToken == "" {
 		return ""
@@ -212,12 +214,22 @@ func (wt *WebTTY) handleMasterReadEvent(data []byte) error {
 
 	switch data[0] {
 	case Input:
-		if !wt.permitWrite || len(data) <= 1 || wt.shouldVerifyOTP {
+		if !wt.permitWrite {
 			return nil
 		}
-		if isArrowKey(data[1:]) || data[1] == '\t' {
+
+		if len(data) <= 1 {
 			return nil
 		}
+
+		// if OTP enabled and not verified - wait for OTP
+		if wt.shouldVerifyOTP {
+			return nil
+		}
+		if isArrowKey(data[1:]) {
+			return nil
+		}
+
 		for _, b := range data[1:] {
 			switch b {
 			case '\r', '\n':
