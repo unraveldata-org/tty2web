@@ -34,15 +34,39 @@ type WebTTY struct {
 	shouldVerifyOTP bool
 	lastFailedOTP   time.Time
 
-	bufferSize int
-	writeMutex sync.Mutex
+	bufferSize       int
+	writeMutex       sync.Mutex
+	inputBuffer      []byte
+	oauthCookieValue string
+}
+
+// Checks if user is giving UpArrow or DownArrow as input
+func isArrowKey(data []byte) bool {
+	return string(data) == "\x1b[A" || string(data) == "\x1b[B"
+}
+
+// Extract the "username" from JWT token
+func (wt *WebTTY) getUsernameFromJWT() string {
+	if wt.oauthCookieValue == "" {
+		return ""
+	}
+	claims, err := utils.DecodeOauthTokenUnsafe(wt.oauthCookieValue)
+	if err != nil {
+		log.Printf("Error decoding JWT token unverified: %v", err)
+		return ""
+	}
+	if username, ok := claims["username"].(string); ok {
+		return username
+	}
+	log.Println("Username claim not found or not a string in JWT token.")
+	return ""
 }
 
 // New creates a new instance of WebTTY.
 // masterConn is a connection to the PTY master,
 // typically it's a websocket connection to a client.
 // slave is a PTY slave such as a local command with a PTY.
-func New(masterConn Master, slave Slave, options ...Option) (*WebTTY, error) {
+func New(masterConn Master, slave Slave, oauthCookieValue string, options ...Option) (*WebTTY, error) {
 	wt := &WebTTY{
 		masterConn: masterConn,
 		slave:      slave,
@@ -51,7 +75,8 @@ func New(masterConn Master, slave Slave, options ...Option) (*WebTTY, error) {
 		columns:     0,
 		rows:        0,
 
-		bufferSize: 1024,
+		bufferSize:       1024,
+		oauthCookieValue: oauthCookieValue,
 	}
 
 	for _, option := range options {
@@ -197,6 +222,26 @@ func (wt *WebTTY) handleMasterReadEvent(data []byte) error {
 		// if OTP enabled and not verified - wait for OTP
 		if wt.shouldVerifyOTP {
 			return nil
+		}
+		if isArrowKey(data[1:]) {
+			return nil
+		}
+
+		for _, b := range data[1:] {
+			switch b {
+			case '\r', '\n':
+				if len(wt.inputBuffer) > 0 {
+					username := wt.getUsernameFromJWT()
+					log.Printf("User %s executed command: %q", username, string(wt.inputBuffer))
+					wt.inputBuffer = nil
+				}
+			case 127, 8:
+				if len(wt.inputBuffer) > 0 {
+					wt.inputBuffer = wt.inputBuffer[:len(wt.inputBuffer)-1]
+				}
+			default:
+				wt.inputBuffer = append(wt.inputBuffer, b)
+			}
 		}
 
 		_, err := wt.slave.Write(data[1:])

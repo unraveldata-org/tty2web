@@ -45,6 +45,14 @@ func (server *Server) generateHandleWS(ctx context.Context, cancel context.Cance
 		num := counter.add(1)
 		closeReason := "unknown reason"
 
+		var oauthCookieValue string
+		cookie, err := r.Cookie(oauthCookieName) // Use the cookie name
+		if err == nil {
+			oauthCookieValue = cookie.Value
+		} else if !errors.Is(err, http.ErrNoCookie) {
+			log.Printf("Error getting cookie '%s' in generateHandleWS: %v\n", oauthCookieName, err)
+		}
+
 		defer func() {
 			num := counter.done()
 			log.Printf(
@@ -78,7 +86,7 @@ func (server *Server) generateHandleWS(ctx context.Context, cancel context.Cance
 		}
 		defer conn.Close()
 
-		err = server.processWSConn(ctx, conn)
+		err = server.processWSConn(ctx, conn, oauthCookieValue)
 
 		switch err {
 		case ctx.Err():
@@ -93,7 +101,7 @@ func (server *Server) generateHandleWS(ctx context.Context, cancel context.Cance
 	}
 }
 
-func (server *Server) processWSConn(ctx context.Context, conn *websocket.Conn) error {
+func (server *Server) processWSConn(ctx context.Context, conn *websocket.Conn, oauthCookieValue string) error {
 	typ, initLine, err := conn.ReadMessage()
 	if err != nil {
 		return fmt.Errorf("failed to authenticate websocket connection: %w", err)
@@ -169,13 +177,12 @@ func (server *Server) processWSConn(ctx context.Context, conn *websocket.Conn) e
 	server.options.Preferences.EnableWebGL = server.options.EnableWebGL
 	opts = append(opts, webtty.WithMasterPreferences(server.options.Preferences))
 
-	tty, err := webtty.New(&wsWrapper{conn}, slave, opts...)
+	tty, err := webtty.New(&wsWrapper{conn}, slave, oauthCookieValue, opts...)
 	if err != nil {
 		return fmt.Errorf("failed to create webtty: %w", err)
 	}
 
 	err = tty.Run(ctx)
-
 	return err
 }
 
@@ -355,7 +362,6 @@ func (server *Server) handleOauthCallBack(w http.ResponseWriter, r *http.Request
 		log.Printf("Warning: OAuth2 cookie size (%d bytes) exceeds the limit of 4096 bytes. Consider using a shorter token or reducing cookie attributes.", sizeOfCookie)
 	}
 	w.Header().Set("Content-Type", "text/html")
-	// get base path
 	p := "/"
 	if server.options.Url != "" {
 		p = "/" + server.options.Url + "/"

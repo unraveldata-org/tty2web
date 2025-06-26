@@ -184,15 +184,18 @@ func DecodeOauthTokenUnsafe(token string) (map[string]interface{}, error) {
 	if len(parts) != 3 {
 		return nil, errors.New("invalid access token")
 	}
-	// Decode the payload part of the JWT token
-	clamins := jwt.MapClaims{}
-	_, err := jwt.ParseWithClaims(token, &clamins, func(token *jwt.Token) (interface{}, error) {
-		return []byte(token.Header["kid"].(string)), nil
+	claims := jwt.MapClaims{}
+	_, err := jwt.ParseWithClaims(token, &claims, func(token *jwt.Token) (interface{}, error) {
+		kid, ok := token.Header["kid"].(string)
+		if !ok {
+			return []byte(""), nil
+		}
+		return []byte(kid), nil
 	}, jwt.WithoutClaimsValidation())
 	if err != nil && (!errors.Is(err, jwt.ErrTokenSignatureInvalid)) {
 		return nil, err
 	}
-	return clamins, nil
+	return claims, nil
 }
 
 // NewOAuth2Config creates a new OAuth2Config with the provided parameters
