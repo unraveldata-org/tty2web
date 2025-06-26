@@ -10,7 +10,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/golang-jwt/jwt/v5"
 	"github.com/kost/tty2web/utils"
 	"github.com/pkg/errors"
 )
@@ -38,7 +37,6 @@ type WebTTY struct {
 	bufferSize       int
 	writeMutex       sync.Mutex
 	inputBuffer      []byte
-	jwtToken         string
 	oauthCookieValue string
 }
 
@@ -49,18 +47,18 @@ func isArrowKey(data []byte) bool {
 
 // Extract the "username" from JWT token
 func (wt *WebTTY) getUsernameFromJWT() string {
-	if wt.jwtToken == "" {
+	if wt.oauthCookieValue == "" {
 		return ""
 	}
-	token, _, err := new(jwt.Parser).ParseUnverified(wt.jwtToken, jwt.MapClaims{})
+	claims, err := utils.DecodeOauthTokenUnsafe(wt.oauthCookieValue)
 	if err != nil {
+		log.Printf("Error decoding JWT token unverified: %v", err)
 		return ""
 	}
-	if claims, ok := token.Claims.(jwt.MapClaims); ok {
-		if username, ok := claims["username"].(string); ok {
-			return username
-		}
+	if username, ok := claims["username"].(string); ok {
+		return username
 	}
+	log.Println("Username claim not found or not a string in JWT token.")
 	return ""
 }
 
@@ -79,7 +77,6 @@ func New(masterConn Master, slave Slave, oauthCookieValue string, options ...Opt
 
 		bufferSize:       1024,
 		oauthCookieValue: oauthCookieValue,
-		jwtToken:         oauthCookieValue,
 	}
 
 	for _, option := range options {
