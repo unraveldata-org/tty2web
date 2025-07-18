@@ -38,6 +38,8 @@ type WebTTY struct {
 	writeMutex       sync.Mutex
 	inputBuffer      []byte
 	oauthCookieValue string
+	tabFlag          bool
+	tabTime          time.Time
 }
 
 // Checks if user is giving UpArrow or DownArrow as input
@@ -188,7 +190,16 @@ func (wt *WebTTY) handleSlaveReadEvent(data []byte) error {
 	if err != nil {
 		return errors.Wrapf(err, "failed to send message to master")
 	}
-
+	if wt.tabFlag {
+		if string(data) != "\a" && len(data) > 0 {
+			for _, c := range data {
+				if c >= 32 && c <= 126 {
+					wt.inputBuffer = append(wt.inputBuffer, c)
+				}
+			}
+		}
+		wt.tabFlag = false
+	}
 	return nil
 }
 
@@ -228,6 +239,13 @@ func (wt *WebTTY) handleMasterReadEvent(data []byte) error {
 		}
 
 		for _, b := range data[1:] {
+			if b == '\t' {
+				wt.tabFlag = true
+				wt.tabTime = time.Now()
+			}
+		}
+
+		for _, b := range data[1:] {
 			switch b {
 			case '\r', '\n':
 				if len(wt.inputBuffer) > 0 {
@@ -240,7 +258,9 @@ func (wt *WebTTY) handleMasterReadEvent(data []byte) error {
 					wt.inputBuffer = wt.inputBuffer[:len(wt.inputBuffer)-1]
 				}
 			default:
-				wt.inputBuffer = append(wt.inputBuffer, b)
+				if b != '\t' {
+					wt.inputBuffer = append(wt.inputBuffer, b)
+				}
 			}
 		}
 
