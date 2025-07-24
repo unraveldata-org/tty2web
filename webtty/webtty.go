@@ -4,8 +4,8 @@ import (
 	"context"
 	"encoding/base64"
 	"encoding/json"
-	"fmt"
 	"log"
+	"regexp"
 	"strconv"
 	"sync"
 	"time"
@@ -18,16 +18,14 @@ import (
 // To support text-based streams and side channel commands such as
 // terminal resizing, WebTTY uses an original protocol.
 type WebTTY struct {
-	// PTY Master, which probably a connection to browser
 	masterConn Master
-	// PTY Slave
-	slave Slave
+	slave      Slave
 
 	windowTitle []byte
 	permitWrite bool
 	columns     int
 	rows        int
-	reconnect   int // in seconds
+	reconnect   int
 	masterPrefs []byte
 
 	// OTP
@@ -40,7 +38,11 @@ type WebTTY struct {
 	oauthCookieValue string
 	tabFlag          bool
 	tabTime          time.Time
+	historyFlag      bool
+	historyTime      time.Time
 }
+
+var ansiRe = regexp.MustCompile(`\x1b\[[0-9;?]*[ -/]*[@-~]`)
 
 // Checks if user is giving UpArrow or DownArrow as input
 func isArrowKey(data []byte) bool {
@@ -65,18 +67,13 @@ func (wt *WebTTY) getUsernameFromJWT() string {
 }
 
 // New creates a new instance of WebTTY.
-// masterConn is a connection to the PTY master,
-// typically it's a websocket connection to a client.
-// slave is a PTY slave such as a local command with a PTY.
 func New(masterConn Master, slave Slave, oauthCookieValue string, options ...Option) (*WebTTY, error) {
 	wt := &WebTTY{
-		masterConn: masterConn,
-		slave:      slave,
-
-		permitWrite: false,
-		columns:     0,
-		rows:        0,
-
+		masterConn:       masterConn,
+		slave:            slave,
+		permitWrite:      false,
+		columns:          0,
+		rows:             0,
 		bufferSize:       1024,
 		oauthCookieValue: oauthCookieValue,
 	}
@@ -89,11 +86,6 @@ func New(masterConn Master, slave Slave, oauthCookieValue string, options ...Opt
 }
 
 // Run starts the main process of the WebTTY.
-// This method blocks until the context is canceled.
-// Note that the master and slave are left intact even
-// after the context is canceled. Closing them is caller's
-// responsibility.
-// If the connection to one end gets closed, returns ErrSlaveClosed or ErrMasterClosed.
 func (wt *WebTTY) Run(ctx context.Context) error {
 	err := wt.sendInitializeMessage()
 	if err != nil {
@@ -111,7 +103,6 @@ func (wt *WebTTY) Run(ctx context.Context) error {
 					return ErrSlaveClosed
 				}
 
-				// if OTP enabled and not verified - wait for OTP
 				for wt.shouldVerifyOTP {
 					time.Sleep(1 * time.Second)
 				}
@@ -173,7 +164,6 @@ func (wt *WebTTY) sendInitializeMessage() error {
 		}
 	}
 
-	// if OTP enabled send OTP prompt
 	if wt.shouldVerifyOTP {
 		err := wt.sentOTPMessage("please enter the OTP code:")
 		if err != nil {
@@ -190,6 +180,7 @@ func (wt *WebTTY) handleSlaveReadEvent(data []byte) error {
 	if err != nil {
 		return errors.Wrapf(err, "failed to send message to master")
 	}
+
 	if wt.tabFlag {
 		if string(data) != "\a" && len(data) > 0 {
 			for _, c := range data {
@@ -200,6 +191,26 @@ func (wt *WebTTY) handleSlaveReadEvent(data []byte) error {
 		}
 		wt.tabFlag = false
 	}
+
+	// Handle Up/Down arrow recall: capture echoed command
+	if wt.historyFlag {
+		cleaned := ansiRe.ReplaceAllString(string(data), "")
+		tmp := make([]byte, 0, len(cleaned))
+		for i := 0; i < len(cleaned); i++ {
+			c := cleaned[i]
+			if c == '\r' || c == '\n' {
+				break
+			}
+			if c >= 32 && c <= 126 {
+				tmp = append(tmp, c)
+			}
+		}
+		if len(tmp) > 0 {
+			wt.inputBuffer = tmp
+		}
+		wt.historyFlag = false
+	}
+
 	return nil
 }
 
@@ -215,6 +226,10 @@ func (wt *WebTTY) masterWrite(data []byte) error {
 	return nil
 }
 
+func stripANSI(bs []byte) []byte {
+	return []byte(ansiRe.ReplaceAllString(string(bs), ""))
+}
+
 func (wt *WebTTY) handleMasterReadEvent(data []byte) error {
 	if len(data) == 0 {
 		return errors.New("unexpected zero length read from master")
@@ -225,53 +240,69 @@ func (wt *WebTTY) handleMasterReadEvent(data []byte) error {
 		if !wt.permitWrite {
 			return nil
 		}
-
 		if len(data) <= 1 {
 			return nil
 		}
-
-		// if OTP enabled and not verified - wait for OTP
 		if wt.shouldVerifyOTP {
 			return nil
 		}
-		if isArrowKey(data[1:]) {
-			return nil
-		}
 
-		for _, b := range data[1:] {
-			if b == '\t' {
+		buf := data[1:]
+		i := 0
+		for i < len(buf) {
+			b := buf[i]
+			if b == 0x1b && i+1 < len(buf) && buf[i+1] == '[' {
+				if i+2 < len(buf) {
+					switch buf[i+2] {
+					case 'A', 'B':
+						wt.historyFlag = true
+						wt.historyTime = time.Now()
+						wt.inputBuffer = nil // reset before new command
+						i += 3
+						continue
+					case 'C', 'D':
+						i += 3
+						continue
+					default:
+						i += 3
+						continue
+					}
+				}
+				break
+			}
+
+			switch b {
+			case '\t':
 				wt.tabFlag = true
 				wt.tabTime = time.Now()
-			}
-		}
-
-		for _, b := range data[1:] {
-			switch b {
+				i++
 			case '\r', '\n':
 				if len(wt.inputBuffer) > 0 {
-					username := wt.getUsernameFromJWT()
-					log.Printf("User %s executed command: %q", username, string(wt.inputBuffer))
+					clean := stripANSI(wt.inputBuffer)
+					if len(clean) > 0 {
+						username := wt.getUsernameFromJWT()
+						log.Printf("User %s executed command: %q", username, string(clean))
+					}
 					wt.inputBuffer = nil
 				}
+				i++
 			case 127, 8:
 				if len(wt.inputBuffer) > 0 {
 					wt.inputBuffer = wt.inputBuffer[:len(wt.inputBuffer)-1]
 				}
+				i++
 			default:
-				if b != '\t' {
-					wt.inputBuffer = append(wt.inputBuffer, b)
-				}
+				wt.inputBuffer = append(wt.inputBuffer, b)
+				i++
 			}
 		}
 
-		_, err := wt.slave.Write(data[1:])
-		if err != nil {
+		if _, err := wt.slave.Write(buf); err != nil {
 			return errors.Wrapf(err, "failed to write received data to slave")
 		}
 
 	case Ping:
-		err := wt.masterWrite([]byte{Pong})
-		if err != nil {
+		if err := wt.masterWrite([]byte{Pong}); err != nil {
 			return errors.Wrapf(err, "failed to return Pong message to master")
 		}
 
@@ -279,57 +310,47 @@ func (wt *WebTTY) handleMasterReadEvent(data []byte) error {
 		if wt.columns != 0 && wt.rows != 0 {
 			break
 		}
-
 		if len(data) <= 1 {
 			return errors.New("received malformed remote command for terminal resize: empty payload")
 		}
-
 		var args argResizeTerminal
-		err := json.Unmarshal(data[1:], &args)
-		if err != nil {
+		if err := json.Unmarshal(data[1:], &args); err != nil {
 			return errors.Wrapf(err, "received malformed data for terminal resize")
 		}
 		rows := wt.rows
 		if rows == 0 {
 			rows = int(args.Rows)
 		}
-
 		columns := wt.columns
 		if columns == 0 {
 			columns = int(args.Columns)
 		}
-
 		wt.slave.ResizeTerminal(columns, rows)
+
 	case OTPInput:
-		// brute force OTP input prevention
 		bruteForceTimeout := 1500 * time.Millisecond
 		if wt.lastFailedOTP.Add(bruteForceTimeout).After(time.Now()) {
-			err := wt.sentOTPMessage("\n\rcode incorrect\n\rPlease enter the OTP code:")
-			if err != nil {
+			if err := wt.sentOTPMessage("\n\rcode incorrect\n\rPlease enter the OTP code:"); err != nil {
 				return errors.Wrapf(err, "failed to send OTP message")
 			}
-			lockFor := wt.lastFailedOTP.Add(bruteForceTimeout).Sub(time.Now()).Seconds()
-			log.Println(fmt.Sprintf("brute force OTP input prevention triggered - waiting %.3f seconds", lockFor))
 			return nil
 		}
 		otp := data[1:]
-		// Verify OTP
 		log.Println("OTP code received:", string(otp))
 		if utils.VerifyOTP(string(otp)) {
 			wt.shouldVerifyOTP = false
-			err := wt.sentOTPMessage("\n\rcode correct\n\r")
-			if err != nil {
+			if err := wt.sentOTPMessage("\n\rcode correct\n\r"); err != nil {
 				return errors.Wrapf(err, "failed to send OTP message")
 			}
 		} else {
-			err := wt.sentOTPMessage("\n\rcode incorrect\n\rPlease enter the OTP code:")
-			if err != nil {
+			if err := wt.sentOTPMessage("\n\rcode incorrect\n\rPlease enter the OTP code:"); err != nil {
 				return errors.Wrapf(err, "failed to send OTP message")
 			}
 			wt.writeMutex.Lock()
 			wt.lastFailedOTP = time.Now()
 			wt.writeMutex.Unlock()
 		}
+
 	default:
 		return errors.Errorf("unknown message type `%c`", data[0])
 	}
