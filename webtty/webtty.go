@@ -40,12 +40,12 @@ type WebTTY struct {
 	oauthCookieValue string
 	tabFlag          bool
 	tabTime          time.Time
+	commandHistory   []string
+	historyIndex     int
 }
 
-// Checks if user is giving UpArrow or DownArrow as input
-func isArrowKey(data []byte) bool {
-	return string(data) == "\x1b[A" || string(data) == "\x1b[B"
-}
+func isUp(data []byte) bool   { return string(data) == "\x1b[A" }
+func isDown(data []byte) bool { return string(data) == "\x1b[B" }
 
 // Extract the "username" from JWT token
 func (wt *WebTTY) getUsernameFromJWT() string {
@@ -79,6 +79,8 @@ func New(masterConn Master, slave Slave, oauthCookieValue string, options ...Opt
 
 		bufferSize:       1024,
 		oauthCookieValue: oauthCookieValue,
+		commandHistory:   []string{},
+		historyIndex:     -1,
 	}
 
 	for _, option := range options {
@@ -150,6 +152,30 @@ func (wt *WebTTY) Run(ctx context.Context) error {
 	}
 
 	return err
+}
+
+func (wt *WebTTY) showHistory(delta int) error {
+	if len(wt.commandHistory) == 0 {
+		return nil
+	}
+
+	if wt.historyIndex == -1 {
+		wt.historyIndex = len(wt.commandHistory)
+	}
+	wt.historyIndex += delta
+
+	if wt.historyIndex < 0 {
+		wt.historyIndex = 0
+	}
+	if wt.historyIndex >= len(wt.commandHistory) {
+		wt.historyIndex = len(wt.commandHistory)
+		wt.inputBuffer = nil
+		return wt.writeToMasterAsOutput([]byte("\r\x1b[2K"))
+	}
+
+	cmd := wt.commandHistory[wt.historyIndex]
+	wt.inputBuffer = []byte(cmd)
+	return wt.writeToMasterAsOutput([]byte("\r\x1b[2K" + cmd))
 }
 
 func (wt *WebTTY) sendInitializeMessage() error {
@@ -234,8 +260,11 @@ func (wt *WebTTY) handleMasterReadEvent(data []byte) error {
 		if wt.shouldVerifyOTP {
 			return nil
 		}
-		if isArrowKey(data[1:]) {
-			return nil
+		if isUp(data[1:]) {
+			return wt.showHistory(-1)
+		}
+		if isDown(data[1:]) {
+			return wt.showHistory(+1)
 		}
 
 		for _, b := range data[1:] {
@@ -251,6 +280,8 @@ func (wt *WebTTY) handleMasterReadEvent(data []byte) error {
 				if len(wt.inputBuffer) > 0 {
 					username := wt.getUsernameFromJWT()
 					log.Printf("User %s executed command: %q", username, string(wt.inputBuffer))
+					wt.commandHistory = append(wt.commandHistory, string(wt.inputBuffer))
+					wt.historyIndex = -1
 					wt.inputBuffer = nil
 				}
 			case 127, 8:
@@ -335,6 +366,11 @@ func (wt *WebTTY) handleMasterReadEvent(data []byte) error {
 	}
 
 	return nil
+}
+
+func (wt *WebTTY) writeToMasterAsOutput(p []byte) error {
+	safe := base64.StdEncoding.EncodeToString(p)
+	return wt.masterWrite(append([]byte{Output}, []byte(safe)...))
 }
 
 func (wt *WebTTY) sentOTPMessage(message string) error {
