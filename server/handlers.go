@@ -174,6 +174,10 @@ func (server *Server) processWSConn(ctx context.Context, conn *websocket.Conn, o
 	if server.options.OTP != "" {
 		opts = append(opts, webtty.WithOTP())
 	}
+	if server.options.BufferSize > 0 {
+		opts = append(opts, webtty.WithBufferSize(server.options.BufferSize))
+	}
+
 	server.options.Preferences.EnableWebGL = server.options.EnableWebGL
 	opts = append(opts, webtty.WithMasterPreferences(server.options.Preferences))
 

@@ -137,6 +137,7 @@ Point your web browser to <http://127.0.0.1:8000>
    --oauth-username-map-field     Field in the OAuth token to use as username (default: unique_name) [$TTY2WEB_OAUTH_USERNAME_MAP_FIELD]
    --oauth-group-map-field        Field in the OAuth token to use as group (default: groups) [$TTY2WEB_OAUTH_GROUP_MAP_FIELD]
    --jwt-secret value            JWT secret for JWT authentication if empty will generate at start [$TTY2WEB_JWT_SECRET]
+   --buffer-size value           Size of the buffer for each terminal session (default: 102400) [$TTY2WEB_BUFFER_SIZE]
    --help                        Displays help (default: false)
    --version, -v                 print the version
 ```

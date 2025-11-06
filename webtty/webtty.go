@@ -75,7 +75,7 @@ func New(masterConn Master, slave Slave, oauthCookieValue string, options ...Opt
 		columns:     0,
 		rows:        0,
 
-		bufferSize:       1024,
+		bufferSize:       102400,
 		oauthCookieValue: oauthCookieValue,
 	}
 
