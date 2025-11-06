@@ -68,6 +68,7 @@ type Options struct {
 	OauthUsernameMapField string   `hcl:"oauth_username_map_field" flagName:"oauth-username-map-field" flagDescribe:"Field in the OAuth token to use as username (default: sub)" default:"unique_name"`
 	OauthGroupMapField    string   `hcl:"oauth_group_map_field" flagName:"oauth-group-map-field" flagDescribe:"Field in the OAuth token to use as group (default: groups)" default:"groups"`
 	JWTSecret             string   `hcl:"jwt_secret" flagName:"jwt-secret" flagDescribe:"JWT secret for JWT authentication if empty will generate at start" default:""`
+	BufferSize            int      `hcl:"buffer_size" flagName:"buffer-size" flagDescribe:"Size of the write buffer for each terminal session" default:"102400"`
 }
 
 func (options *Options) Validate() error {

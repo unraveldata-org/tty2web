@@ -68,3 +68,11 @@ func WithOTP() Option {
 		return nil
 	}
 }
+
+// WithBufferSize sets the max buffer size for the WebTTY session.
+func WithBufferSize(size int) Option {
+	return func(wt *WebTTY) error {
+		wt.bufferSize = size
+		return nil
+	}
+}
