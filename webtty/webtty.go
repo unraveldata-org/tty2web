@@ -37,12 +37,51 @@ type WebTTY struct {
 	bufferSize       int
 	writeMutex       sync.Mutex
 	inputBuffer      []byte
+	inputCursor      int
+	commandHistory   []string
+	historyIndex     int
+	historyDraft     string
+	historyActive    bool
 	oauthCookieValue string
 }
 
-// Checks if user is giving UpArrow or DownArrow as input
-func isArrowKey(data []byte) bool {
-	return string(data) == "\x1b[A" || string(data) == "\x1b[B"
+func (wt *WebTTY) setInputBuffer(command string) {
+	wt.inputBuffer = []byte(command)
+	wt.inputCursor = len(wt.inputBuffer)
+}
+
+func (wt *WebTTY) resetHistoryNavigation() {
+	wt.historyActive = false
+	wt.historyDraft = ""
+	wt.historyIndex = len(wt.commandHistory)
+}
+
+func (wt *WebTTY) previousHistory() {
+	if len(wt.commandHistory) == 0 {
+		return
+	}
+	if !wt.historyActive {
+		wt.historyDraft = string(wt.inputBuffer)
+		wt.historyIndex = len(wt.commandHistory)
+		wt.historyActive = true
+	}
+	if wt.historyIndex > 0 {
+		wt.historyIndex--
+	}
+	wt.setInputBuffer(wt.commandHistory[wt.historyIndex])
+}
+
+func (wt *WebTTY) nextHistory() {
+	if !wt.historyActive {
+		return
+	}
+	if wt.historyIndex < len(wt.commandHistory)-1 {
+		wt.historyIndex++
+		wt.setInputBuffer(wt.commandHistory[wt.historyIndex])
+		return
+	}
+	wt.setInputBuffer(wt.historyDraft)
+	wt.resetHistoryNavigation()
 }
 
 // Extract the "username" from JWT token
@@ -223,24 +262,56 @@ func (wt *WebTTY) handleMasterReadEvent(data []byte) error {
 		if wt.shouldVerifyOTP {
 			return nil
 		}
-		if isArrowKey(data[1:]) {
-			return nil
-		}
+		input := data[1:]
+		for i := 0; i < len(input); i++ {
+			b := input[i]
 
-		for _, b := range data[1:] {
+			if b == '\x1b' {
+				if i+2 < len(input) && input[i+1] == '[' {
+					switch input[i+2] {
+					case 'A':
+						wt.previousHistory()
+						i += 2
+						continue
+					case 'B':
+						wt.nextHistory()
+						i += 2
+						continue
+					case 'C':
+						if wt.inputCursor < len(wt.inputBuffer) {
+							wt.inputCursor++
+						}
+						i += 2
+						continue
+					case 'D':
+						if wt.inputCursor > 0 {
+							wt.inputCursor--
+						}
+						i += 2
+						continue
+					}
+				}
+				continue
+			}
+
 			switch b {
 			case '\r', '\n':
 				if len(wt.inputBuffer) > 0 {
 					username := wt.getUsernameFromJWT()
 					log.Printf("User %s executed command: %q", username, string(wt.inputBuffer))
+					wt.commandHistory = append(wt.commandHistory, string(wt.inputBuffer))
 					wt.inputBuffer = nil
+					wt.inputCursor = 0
+					wt.resetHistoryNavigation()
 				}
 			case 127, 8:
-				if len(wt.inputBuffer) > 0 {
-					wt.inputBuffer = wt.inputBuffer[:len(wt.inputBuffer)-1]
+				if wt.inputCursor > 0 {
+					wt.inputBuffer = append(wt.inputBuffer[:wt.inputCursor-1], wt.inputBuffer[wt.inputCursor:]...)
+					wt.inputCursor--
 				}
 			default:
-				wt.inputBuffer = append(wt.inputBuffer, b)
+				wt.inputBuffer = append(wt.inputBuffer[:wt.inputCursor], append([]byte{b}, wt.inputBuffer[wt.inputCursor:]...)...)
+				wt.inputCursor++
 			}
 		}
 
