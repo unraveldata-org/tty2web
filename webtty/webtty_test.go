@@ -64,9 +64,9 @@ func withWebTTY(t *testing.T, f func(tty *WebTTY, master, slave io.ReadWriter)) 
 	// start webtty in a goroutine and watch for errors
 	ctx, cancel := context.WithCancel(context.Background())
 	var wg sync.WaitGroup
+	runErrors := make(chan error, 1)
 	wg.Add(1)
 	go func() {
-		t.Log("Starting WebTTY.Run()")
 		defer wg.Done()
 		err := tty.Run(ctx)
 		if err != nil {
@@ -75,7 +75,7 @@ func withWebTTY(t *testing.T, f func(tty *WebTTY, master, slave io.ReadWriter)) 
 				// The context is cancelled at the end of the test so ignore this error
 				break
 			default:
-				t.Fatalf("Unexpected error from Run(): %s", err)
+				runErrors <- err
 			}
 		}
 	}()
@@ -91,6 +91,10 @@ func withWebTTY(t *testing.T, f func(tty *WebTTY, master, slave io.ReadWriter)) 
 
 	cancel()
 	wg.Wait()
+	close(runErrors)
+	for err := range runErrors {
+		t.Fatalf("Unexpected error from Run(): %s", err)
+	}
 }
 
 func TestWriteInputFromMaster(t *testing.T) {
@@ -119,150 +123,49 @@ func TestWriteInputFromMaster(t *testing.T) {
 	})
 }
 
-func TestArrowInputBuffer(t *testing.T) {
+func makeAuditMarker(command string) []byte {
+	encoded := base64.StdEncoding.EncodeToString([]byte(command))
+	return []byte(auditMarkerPrefix + encoded + auditMarkerSuffix)
+}
+
+func TestAuditMarkerFilter(t *testing.T) {
 	tty, err := New(&bytes.Buffer{}, slaveBiDirectionalPipeEnd{&bytes.Buffer{}}, "", WithPermitWrite())
 	if err != nil {
 		t.Fatalf("Unexpected error from New(): %s", err)
 	}
 
-	err = tty.handleMasterReadEvent(makeInputMessage([]byte("echo hello\x1b[D\x1b[C")))
-	if err != nil {
-		t.Fatalf("Unexpected error from handleMasterReadEvent(): %s", err)
-	}
+	input := append([]byte("before "), makeAuditMarker("echo one")...)
+	input = append(input, []byte(" after")...)
 
-	if got, want := string(tty.inputBuffer), "echo hello"; got != want {
-		t.Fatalf("inputBuffer = %q, want %q", got, want)
+	if got, want := string(tty.filterAuditMarkers(input)), "before  after"; got != want {
+		t.Fatalf("filterAuditMarkers() = %q, want %q", got, want)
+	}
+	if len(tty.auditBuffer) != 0 {
+		t.Fatalf("auditBuffer = %q, want empty", string(tty.auditBuffer))
 	}
 }
 
-func TestInputBufferInsertAtCursor(t *testing.T) {
+func TestAuditMarkerSplit(t *testing.T) {
 	tty, err := New(&bytes.Buffer{}, slaveBiDirectionalPipeEnd{&bytes.Buffer{}}, "", WithPermitWrite())
 	if err != nil {
 		t.Fatalf("Unexpected error from New(): %s", err)
 	}
 
-	err = tty.handleMasterReadEvent(makeInputMessage([]byte("helo\x1b[D\x1b[Dl")))
-	if err != nil {
-		t.Fatalf("Unexpected error from handleMasterReadEvent(): %s", err)
-	}
+	marker := makeAuditMarker("echo one")
+	first := append([]byte("before "), marker[:10]...)
+	second := append(marker[10:], []byte(" after")...)
 
-	if got, want := string(tty.inputBuffer), "hello"; got != want {
-		t.Fatalf("inputBuffer = %q, want %q", got, want)
+	if got, want := string(tty.filterAuditMarkers(first)), "before "; got != want {
+		t.Fatalf("first filterAuditMarkers() = %q, want %q", got, want)
 	}
-}
-
-func TestInputBufferBackspaceAtCursor(t *testing.T) {
-	tty, err := New(&bytes.Buffer{}, slaveBiDirectionalPipeEnd{&bytes.Buffer{}}, "", WithPermitWrite())
-	if err != nil {
-		t.Fatalf("Unexpected error from New(): %s", err)
+	if len(tty.auditBuffer) == 0 {
+		t.Fatalf("auditBuffer is empty, want partial marker")
 	}
-
-	err = tty.handleMasterReadEvent(makeInputMessage([]byte("hello\x1b[D\x1b[D\x7f")))
-	if err != nil {
-		t.Fatalf("Unexpected error from handleMasterReadEvent(): %s", err)
+	if got, want := string(tty.filterAuditMarkers(second)), " after"; got != want {
+		t.Fatalf("second filterAuditMarkers() = %q, want %q", got, want)
 	}
-
-	if got, want := string(tty.inputBuffer), "helo"; got != want {
-		t.Fatalf("inputBuffer = %q, want %q", got, want)
-	}
-}
-
-func TestInputBufferCommandHistory(t *testing.T) {
-	tty, err := New(&bytes.Buffer{}, slaveBiDirectionalPipeEnd{&bytes.Buffer{}}, "", WithPermitWrite())
-	if err != nil {
-		t.Fatalf("Unexpected error from New(): %s", err)
-	}
-
-	err = tty.handleMasterReadEvent(makeInputMessage([]byte("echo one\n")))
-	if err != nil {
-		t.Fatalf("Unexpected error from handleMasterReadEvent(): %s", err)
-	}
-
-	if got, want := len(tty.commandHistory), 1; got != want {
-		t.Fatalf("len(commandHistory) = %d, want %d", got, want)
-	}
-	if got, want := tty.commandHistory[0], "echo one"; got != want {
-		t.Fatalf("commandHistory[0] = %q, want %q", got, want)
-	}
-	if got, want := string(tty.inputBuffer), ""; got != want {
-		t.Fatalf("inputBuffer = %q, want %q", got, want)
-	}
-	if got, want := tty.inputCursor, 0; got != want {
-		t.Fatalf("inputCursor = %d, want %d", got, want)
-	}
-}
-
-func TestInputBufferHistoryUp(t *testing.T) {
-	tty, err := New(&bytes.Buffer{}, slaveBiDirectionalPipeEnd{&bytes.Buffer{}}, "", WithPermitWrite())
-	if err != nil {
-		t.Fatalf("Unexpected error from New(): %s", err)
-	}
-
-	for _, command := range []string{"echo one\n", "echo two\n"} {
-		err = tty.handleMasterReadEvent(makeInputMessage([]byte(command)))
-		if err != nil {
-			t.Fatalf("Unexpected error from handleMasterReadEvent(): %s", err)
-		}
-	}
-
-	err = tty.handleMasterReadEvent(makeInputMessage([]byte("\x1b[A")))
-	if err != nil {
-		t.Fatalf("Unexpected error from handleMasterReadEvent(): %s", err)
-	}
-
-	if got, want := string(tty.inputBuffer), "echo two"; got != want {
-		t.Fatalf("inputBuffer = %q, want %q", got, want)
-	}
-	if got, want := tty.inputCursor, len("echo two"); got != want {
-		t.Fatalf("inputCursor = %d, want %d", got, want)
-	}
-}
-
-func TestInputBufferHistoryDownRestoresDraft(t *testing.T) {
-	tty, err := New(&bytes.Buffer{}, slaveBiDirectionalPipeEnd{&bytes.Buffer{}}, "", WithPermitWrite())
-	if err != nil {
-		t.Fatalf("Unexpected error from New(): %s", err)
-	}
-
-	err = tty.handleMasterReadEvent(makeInputMessage([]byte("echo one\n")))
-	if err != nil {
-		t.Fatalf("Unexpected error from handleMasterReadEvent(): %s", err)
-	}
-	err = tty.handleMasterReadEvent(makeInputMessage([]byte("partial")))
-	if err != nil {
-		t.Fatalf("Unexpected error from handleMasterReadEvent(): %s", err)
-	}
-	err = tty.handleMasterReadEvent(makeInputMessage([]byte("\x1b[A\x1b[B")))
-	if err != nil {
-		t.Fatalf("Unexpected error from handleMasterReadEvent(): %s", err)
-	}
-
-	if got, want := string(tty.inputBuffer), "partial"; got != want {
-		t.Fatalf("inputBuffer = %q, want %q", got, want)
-	}
-	if got, want := tty.inputCursor, len("partial"); got != want {
-		t.Fatalf("inputCursor = %d, want %d", got, want)
-	}
-}
-
-func TestInputBufferHistoryUpSubmitsCommand(t *testing.T) {
-	tty, err := New(&bytes.Buffer{}, slaveBiDirectionalPipeEnd{&bytes.Buffer{}}, "", WithPermitWrite())
-	if err != nil {
-		t.Fatalf("Unexpected error from New(): %s", err)
-	}
-
-	for _, input := range []string{"echo one\n", "partial", "\x1b[A\n"} {
-		err = tty.handleMasterReadEvent(makeInputMessage([]byte(input)))
-		if err != nil {
-			t.Fatalf("Unexpected error from handleMasterReadEvent(): %s", err)
-		}
-	}
-
-	if got, want := len(tty.commandHistory), 2; got != want {
-		t.Fatalf("len(commandHistory) = %d, want %d", got, want)
-	}
-	if got, want := tty.commandHistory[1], "echo one"; got != want {
-		t.Fatalf("commandHistory[1] = %q, want %q", got, want)
+	if len(tty.auditBuffer) != 0 {
+		t.Fatalf("auditBuffer = %q, want empty", string(tty.auditBuffer))
 	}
 }
 

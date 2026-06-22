@@ -1,10 +1,10 @@
 package webtty
 
 import (
+	"bytes"
 	"context"
 	"encoding/base64"
 	"encoding/json"
-	"fmt"
 	"log"
 	"strconv"
 	"sync"
@@ -36,53 +36,12 @@ type WebTTY struct {
 
 	bufferSize       int
 	writeMutex       sync.Mutex
-	inputBuffer      []byte
-	inputCursor      int
-	commandHistory   []string
-	historyIndex     int
-	historyDraft     string
-	historyActive    bool
+	auditBuffer      []byte
 	oauthCookieValue string
 }
 
-func (wt *WebTTY) setInputBuffer(command string) {
-	wt.inputBuffer = []byte(command)
-	wt.inputCursor = len(wt.inputBuffer)
-}
-
-func (wt *WebTTY) resetHistoryNavigation() {
-	wt.historyActive = false
-	wt.historyDraft = ""
-	wt.historyIndex = len(wt.commandHistory)
-}
-
-func (wt *WebTTY) previousHistory() {
-	if len(wt.commandHistory) == 0 {
-		return
-	}
-	if !wt.historyActive {
-		wt.historyDraft = string(wt.inputBuffer)
-		wt.historyIndex = len(wt.commandHistory)
-		wt.historyActive = true
-	}
-	if wt.historyIndex > 0 {
-		wt.historyIndex--
-	}
-	wt.setInputBuffer(wt.commandHistory[wt.historyIndex])
-}
-
-func (wt *WebTTY) nextHistory() {
-	if !wt.historyActive {
-		return
-	}
-	if wt.historyIndex < len(wt.commandHistory)-1 {
-		wt.historyIndex++
-		wt.setInputBuffer(wt.commandHistory[wt.historyIndex])
-		return
-	}
-	wt.setInputBuffer(wt.historyDraft)
-	wt.resetHistoryNavigation()
-}
+const auditMarkerPrefix = "\x1b]777;tty2web-audit="
+const auditMarkerSuffix = "\x07"
 
 // Extract the "username" from JWT token
 func (wt *WebTTY) getUsernameFromJWT() string {
@@ -222,6 +181,11 @@ func (wt *WebTTY) sendInitializeMessage() error {
 }
 
 func (wt *WebTTY) handleSlaveReadEvent(data []byte) error {
+	data = wt.filterAuditMarkers(data)
+	if len(data) == 0 {
+		return nil
+	}
+
 	safeMessage := base64.StdEncoding.EncodeToString(data)
 	err := wt.masterWrite(append([]byte{Output}, []byte(safeMessage)...))
 	if err != nil {
@@ -229,6 +193,67 @@ func (wt *WebTTY) handleSlaveReadEvent(data []byte) error {
 	}
 
 	return nil
+}
+
+func (wt *WebTTY) filterAuditMarkers(data []byte) []byte {
+	data = append(wt.auditBuffer, data...)
+	wt.auditBuffer = nil
+
+	var output []byte
+	prefix := []byte(auditMarkerPrefix)
+	suffix := []byte(auditMarkerSuffix)
+
+	for len(data) > 0 {
+		start := bytes.Index(data, prefix)
+		if start == -1 {
+			keep := auditPrefixOverlap(data, prefix)
+			output = append(output, data[:len(data)-keep]...)
+			wt.auditBuffer = append(wt.auditBuffer, data[len(data)-keep:]...)
+			return output
+		}
+
+		output = append(output, data[:start]...)
+		data = data[start+len(prefix):]
+
+		end := bytes.Index(data, suffix)
+		if end == -1 {
+			wt.auditBuffer = append(wt.auditBuffer, prefix...)
+			wt.auditBuffer = append(wt.auditBuffer, data...)
+			return output
+		}
+
+		wt.logAuditCommand(data[:end])
+		data = data[end+len(suffix):]
+	}
+
+	return output
+}
+
+func auditPrefixOverlap(data, prefix []byte) int {
+	max := len(prefix) - 1
+	if len(data) < max {
+		max = len(data)
+	}
+	for n := max; n > 0; n-- {
+		if bytes.Equal(data[len(data)-n:], prefix[:n]) {
+			return n
+		}
+	}
+	return 0
+}
+
+func (wt *WebTTY) logAuditCommand(encoded []byte) {
+	command, err := base64.StdEncoding.DecodeString(string(encoded))
+	if err != nil {
+		log.Printf("Error decoding audit command: %v", err)
+		return
+	}
+	if len(command) == 0 {
+		return
+	}
+
+	username := wt.getUsernameFromJWT()
+	log.Printf("User %s executed command: %q", username, string(command))
 }
 
 func (wt *WebTTY) masterWrite(data []byte) error {
@@ -261,58 +286,6 @@ func (wt *WebTTY) handleMasterReadEvent(data []byte) error {
 		// if OTP enabled and not verified - wait for OTP
 		if wt.shouldVerifyOTP {
 			return nil
-		}
-		input := data[1:]
-		for i := 0; i < len(input); i++ {
-			b := input[i]
-
-			if b == '\x1b' {
-				if i+2 < len(input) && input[i+1] == '[' {
-					switch input[i+2] {
-					case 'A':
-						wt.previousHistory()
-						i += 2
-						continue
-					case 'B':
-						wt.nextHistory()
-						i += 2
-						continue
-					case 'C':
-						if wt.inputCursor < len(wt.inputBuffer) {
-							wt.inputCursor++
-						}
-						i += 2
-						continue
-					case 'D':
-						if wt.inputCursor > 0 {
-							wt.inputCursor--
-						}
-						i += 2
-						continue
-					}
-				}
-				continue
-			}
-
-			switch b {
-			case '\r', '\n':
-				if len(wt.inputBuffer) > 0 {
-					username := wt.getUsernameFromJWT()
-					log.Printf("User %s executed command: %q", username, string(wt.inputBuffer))
-					wt.commandHistory = append(wt.commandHistory, string(wt.inputBuffer))
-					wt.inputBuffer = nil
-					wt.inputCursor = 0
-					wt.resetHistoryNavigation()
-				}
-			case 127, 8:
-				if wt.inputCursor > 0 {
-					wt.inputBuffer = append(wt.inputBuffer[:wt.inputCursor-1], wt.inputBuffer[wt.inputCursor:]...)
-					wt.inputCursor--
-				}
-			default:
-				wt.inputBuffer = append(wt.inputBuffer[:wt.inputCursor], append([]byte{b}, wt.inputBuffer[wt.inputCursor:]...)...)
-				wt.inputCursor++
-			}
 		}
 
 		_, err := wt.slave.Write(data[1:])
@@ -359,8 +332,8 @@ func (wt *WebTTY) handleMasterReadEvent(data []byte) error {
 			if err != nil {
 				return errors.Wrapf(err, "failed to send OTP message")
 			}
-			lockFor := wt.lastFailedOTP.Add(bruteForceTimeout).Sub(time.Now()).Seconds()
-			log.Println(fmt.Sprintf("brute force OTP input prevention triggered - waiting %.3f seconds", lockFor))
+			lockFor := time.Until(wt.lastFailedOTP.Add(bruteForceTimeout)).Seconds()
+			log.Printf("brute force OTP input prevention triggered - waiting %.3f seconds", lockFor)
 			return nil
 		}
 		otp := data[1:]
