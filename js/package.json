@@ -5,8 +5,8 @@
     },
     "devDependencies": {
         "@babel/cli": "^7.15.7",
-        "@babel/core": "^7.7.7",
-        "@babel/preset-env": "^7.27.2",
+        "@babel/core": "^8.0.1",
+        "@babel/preset-env": "^8.0.2",
         "license-loader": "^0.7.0",
         "terser-webpack-plugin": "^5.3.6",
         "ts-loader": "^9.4.2",
@@ -15,7 +15,7 @@
         "webpack-cli": "^5.1.4"
     },
     "dependencies": {
-        "@babel/plugin-transform-runtime": "^7.23.3",
+        "@babel/plugin-transform-runtime": "^8.0.1",
         "@babel/polyfill": "^7.12.1",
         "@babel/runtime": "^7.26.10",
         "@xterm/addon-fit": "^0.10.0",
